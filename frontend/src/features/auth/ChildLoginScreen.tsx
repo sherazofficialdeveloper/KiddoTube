@@ -1,18 +1,18 @@
 // src/features/auth/ChildLoginScreen.tsx
+import { ChildFontText as Text, ChildFontTextInput as TextInput } from '../../components/ui/ChildFontText';
 
 import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
@@ -21,7 +21,7 @@ import { hexLongToColor } from '../../utils/color';
 import { useContentStore } from '../../store/contentStore';
 import { useScreenTimeStore } from '../../store/screenTimeStore';
 import { KiddoTubeLogo } from '../../components/branding';
-import { ScreenState } from '../../types/navigation';
+import { AuthMode, ScreenState } from '../../types/navigation';
 import type { RootStackParamList } from '../../types/navigation';
 import type { ChildProfile } from '../../types/models';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -38,13 +38,14 @@ type ChildLoginScreenProps = NativeStackScreenProps<
   RootStackParamList,
   ScreenState.CHILD_LOGIN
 > & {
-  onParentSettingsClick?: () => void;
+  onParentSettingsClick?: (mode?: AuthMode) => void;
 };
 
 export const ChildLoginScreen: React.FC<ChildLoginScreenProps> = ({
   navigation,
   onParentSettingsClick,
 }) => {
+  const insets = useSafeAreaInsets();
   const childProfiles = useContentStore((s) => s.childProfiles);
 
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -53,6 +54,16 @@ export const ChildLoginScreen: React.FC<ChildLoginScreenProps> = ({
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     useContentStore.getState().initializeAppData();
@@ -125,17 +136,24 @@ export const ChildLoginScreen: React.FC<ChildLoginScreenProps> = ({
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom + 120, 220) },
+          ]}
+          scrollEnabled={isKeyboardVisible}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator={true}
         >
         <View style={styles.logoWrap}>
           <KiddoTubeLogo size="large" showTagline={true} />
         </View>
 
-        <Text style={styles.greeting}>Who's watching today? 🎈</Text>
+        <View style={styles.whoHeaderWrap}>
+          <Text style={styles.whoHeaderTitle}>Who's watching?</Text>
+          <Text style={styles.whoHeaderSubtitle}>Only approved videos for that profile.</Text>
+        </View>
 
         <Text style={styles.profileLabel}>Tap Your Profile</Text>
 
@@ -191,11 +209,9 @@ export const ChildLoginScreen: React.FC<ChildLoginScreenProps> = ({
 
           {/* Username Field with Label */}
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Explorer Username *</Text>
+            <Text style={styles.fieldLabel}>Child Username</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter child username (e.g. ali)"
-              placeholderTextColor={Colors.kidsTextMuted}
               value={username}
               onChangeText={(t) => {
                 setUsername(t);
@@ -216,12 +232,10 @@ export const ChildLoginScreen: React.FC<ChildLoginScreenProps> = ({
 
           {/* Password Field with Label */}
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Kids Secret Password *</Text>
+            <Text style={styles.fieldLabel}>Password</Text>
             <View style={styles.passwordWrap}>
               <TextInput
                 style={[styles.input, styles.passwordInput]}
-                placeholder="Enter password configured by parents"
-                placeholderTextColor={Colors.kidsTextMuted}
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
@@ -230,6 +244,7 @@ export const ChildLoginScreen: React.FC<ChildLoginScreenProps> = ({
                 secureTextEntry={!isPasswordVisible}
                 autoCapitalize="none"
                 autoCorrect={false}
+                numberOfLines={1}
                 testID="password_input"
                 onSubmitEditing={() =>
                   executeLogin(username, password, selectedProfileId)
@@ -250,7 +265,10 @@ export const ChildLoginScreen: React.FC<ChildLoginScreenProps> = ({
           </View>
 
           {errorMessage ? (
-            <Text style={styles.errorText}>{errorMessage}</Text>
+            <View style={styles.errorBox}>
+              <MaterialIcons name="error-outline" size={20} color="#DC2626" style={{ marginRight: 8 }} />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
           ) : null}
 
           <TouchableOpacity
@@ -265,27 +283,35 @@ export const ChildLoginScreen: React.FC<ChildLoginScreenProps> = ({
             {isLoading ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.loginButtonText}>Let's Go! 🚀</Text>
+              <Text style={styles.loginButtonText}>Sign In</Text>
             )}
           </TouchableOpacity>
         </View>
 
-          <TouchableOpacity
-            style={styles.parentEntry}
-            activeOpacity={0.7}
-            onPress={onParentSettingsClick}
-            testID="parent_settings_access_button"
-          >
-            <MaterialIcons
-              name="lock"
-              size={16}
-              color={Colors.kidsTextSecondary}
-            />
-            <Text style={styles.parentEntryText}>
-              Parent? Create an account or sign in to add your child and set up
-              safe videos.
-            </Text>
-          </TouchableOpacity>
+          {/* Parents & Guardians Single Gateway Button */}
+          <View style={styles.guardianAccessWrap}>
+            <TouchableOpacity
+              style={styles.guardianAccessButton}
+              activeOpacity={0.88}
+              onPress={() =>
+                navigation.navigate(ScreenState.PARENT_AUTH, { initialTab: 'login' })
+              }
+              testID="parents_guardians_access_button"
+            >
+              <View style={styles.guardianIconCircle}>
+                <MaterialIcons name="family-restroom" size={24} color="#3A9BE8" />
+              </View>
+              <View style={styles.guardianTextWrap}>
+                <View style={styles.guardianHeaderRow}>
+                  <Text style={styles.guardianButtonTitle}>Parents & Guardians Access</Text>
+                  <MaterialIcons name="chevron-right" size={24} color="#3A9BE8" />
+                </View>
+                <Text style={styles.guardianButtonSubtitle}>
+                  Parent sign in, account setup & admin portal
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -298,26 +324,46 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: Dimensions.spaceLarge,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingTop: 8,
+    paddingBottom: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: Dimensions.spaceMedium,
-    marginBottom: 6,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  whoHeaderWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  whoHeaderTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  whoHeaderSubtitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#000000',
+    textAlign: 'center',
+    marginTop: 2,
   },
   greeting: {
     ...Typography.titleMedium,
-    color: Colors.kidsTextSecondary,
+    color: '#000000',
+    fontWeight: '700',
     marginTop: 6,
   },
   profileLabel: {
     ...Typography.labelMedium,
-    color: Colors.kidsTextMuted,
-    fontWeight: '700',
+    color: '#000000',
+    fontWeight: '800',
     marginTop: Dimensions.spaceLarge,
   },
   profileRow: {
@@ -338,14 +384,16 @@ const styles = StyleSheet.create({
   profileEmoji: { fontSize: 30 },
   profileName: {
     ...Typography.labelMedium,
+    color: '#000000',
+    fontWeight: '800',
     marginTop: 4,
   },
   credentialsCard: {
     width: '100%',
     backgroundColor: Colors.kidsSurface,
     borderRadius: Dimensions.radiusLarge,
-    padding: Dimensions.spaceLarge,
-    marginTop: Dimensions.spaceLarge,
+    padding: 16,
+    marginTop: 10,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
@@ -355,41 +403,33 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     ...Typography.titleMedium,
-    color: Colors.kidsTextPrimary,
-    marginBottom: Dimensions.spaceMedium,
+    color: '#000000',
+    fontWeight: '900',
+    marginBottom: 10,
   },
   inputGroup: {
     width: '100%',
-    marginBottom: 12,
     marginBottom: 14,
   },
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 4,
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.kidsTextPrimary,
+    color: '#000000',
     marginBottom: 6,
     alignSelf: 'flex-start',
   },
   input: {
     width: '100%',
-    minHeight: 52,
+    minHeight: 56,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#CBD5E1',
-    borderRadius: Dimensions.radiusSmall,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 14,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.kidsTextPrimary,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#000000',
   },
   passwordWrap: {
     width: '100%',
@@ -397,64 +437,102 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   passwordInput: {
-    paddingRight: 48,
-    paddingRight: 50,
+    paddingRight: 52,
   },
   eyeButton: {
     position: 'absolute',
-    right: 6,
     right: 8,
     top: 0,
     bottom: 0,
-    width: 42,
     width: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  errorBox: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
   errorText: {
-    ...Typography.bodyMedium,
-    color: Colors.kidsError,
-    fontWeight: '600',
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 10,
+    flex: 1,
+    fontSize: 14,
+    color: '#DC2626',
+    fontWeight: '800',
+    lineHeight: 20,
   },
   loginButton: {
     width: '100%',
-    height: Dimensions.touchTargetLarge,
-    minHeight: 54,
+    minHeight: 56,
     borderRadius: Dimensions.radiusPill,
     backgroundColor: Colors.kidsPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Dimensions.spaceLarge,
+    shadowColor: Colors.kidsPrimary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   loginButtonText: {
-    ...Typography.titleMedium,
-    fontSize: 17,
+    fontSize: 18,
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  parentEntry: {
+  // Adult & Guardian Management Actions
+  guardianAccessWrap: {
+    width: '100%',
+    marginTop: 12,
+  },
+  guardianAccessButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Dimensions.spaceLarge,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#3A9BE8',
+    borderRadius: 18,
     paddingVertical: 10,
+    paddingHorizontal: 14,
+    shadowColor: '#3A9BE8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  parentEntryText: {
-    ...Typography.labelMedium,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.kidsTextSecondary,
-    marginLeft: 6,
-    fontWeight: '600',
-    marginLeft: 8,
+  guardianIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EAF4FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  guardianTextWrap: {
+    flex: 1,
+  },
+  guardianHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  guardianButtonTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  guardianButtonSubtitle: {
+    fontSize: 13,
     fontWeight: '700',
-    flexShrink: 1,
-    textAlign: 'center',
+    color: '#000000',
+    marginTop: 2,
+    lineHeight: 18,
   },
 });

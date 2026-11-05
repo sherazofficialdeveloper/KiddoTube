@@ -1,20 +1,25 @@
 // src/features/parent-dashboard/dialogs/AddChildDialog.tsx
+import { FontText as Text, FontTextInput as TextInput } from '../../../components/ui/FontText';
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
-  TextInput,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Typography } from '../../../theme/typography';
 import { hexLongToColor } from '../../../utils/color';
 import { Api } from '../../../services/api';
+import {
+  CHILD_AGE_BANDS,
+  CHILD_AVATAR_COLORS,
+  CHILD_AVATARS,
+} from '../../../constants/childProfiles';
 
 interface AddChildDialogProps {
   visible: boolean;
@@ -29,34 +34,20 @@ interface AddChildDialogProps {
   ) => Promise<{ success: boolean; error?: string }>;
 }
 
-const EMOJIS = [
-  '🚀', '🦁', '🎨', '⚽',
-  '🦄', '🐼', '🎸', '🦖',
-  '🐱', '🐶', '🦊', '🐻',
-  '🐯', '🐸', '🐧', '🐬'
-];
-
-const COLORS = [
-  0xff3a9be8, // Logo Sky Blue
-  0xffff6f61, // Logo Coral
-  0xffffc93c, // Logo Sunny Yellow
-  0xff1f2a44, // Deep Navy
-  0xff70bdf6, // Light Sky Blue
-  0xffffb703, // Amber
-];
-
-type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken';
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error';
 
 export const AddChildDialog: React.FC<AddChildDialogProps> = ({
   visible,
   onDismiss,
   onConfirm,
 }) => {
+  const insets = useSafeAreaInsets();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [selectedEmoji, setSelectedEmoji] = useState('🚀');
-  const [selectedColor, setSelectedColor] = useState(0xff3a9be8);
+  const [selectedEmoji, setSelectedEmoji] = useState(CHILD_AVATARS[0]);
+  const [selectedColor, setSelectedColor] = useState(CHILD_AVATAR_COLORS[0]);
+  const [ageGroup, setAgeGroup] = useState<number>(CHILD_AGE_BANDS[1].ageGroup);
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -70,9 +61,9 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
     setUsername('');
     setPassword('');
     setIsPasswordVisible(false);
-    setSelectedEmoji('🚀');
-    setSelectedColor(0xff00a6fb);
-    setSelectedColor(0xff3a9be8);
+    setSelectedEmoji(CHILD_AVATARS[0]);
+    setSelectedColor(CHILD_AVATAR_COLORS[0]);
+    setAgeGroup(CHILD_AGE_BANDS[1].ageGroup);
     setErrorMessage(null);
     setUsernameStatus('idle');
     setUsernameFeedback('');
@@ -108,18 +99,16 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
     debounceTimerRef.current = setTimeout(async () => {
       try {
         const res = await Api.checkChildUsername(clean);
-        if (res.available) {
+        if (res.success && res.available) {
           setUsernameStatus('available');
           setUsernameFeedback('Username is available! ✓');
         } else {
           setUsernameStatus('taken');
-          setUsernameFeedback(
-            res.message || 'Username already exists! Please choose another.'
-          );
+          setUsernameFeedback(res.message || 'Username is already taken. Choose another.');
         }
-      } catch (err: any) {
-        setUsernameStatus('idle');
-        setUsernameFeedback('');
+      } catch {
+        setUsernameStatus('error');
+        setUsernameFeedback('Could not verify this username. Check your connection and try again.');
       }
     }, 350);
   };
@@ -166,7 +155,7 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
         trimmedPass,
         selectedEmoji,
         selectedColor,
-        6
+        ageGroup
       );
 
       if (result.success) {
@@ -188,6 +177,7 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
   const isSubmitDisabled =
     isCreating ||
     usernameStatus === 'taken' ||
+    usernameStatus === 'error' ||
     usernameStatus === 'checking' ||
     !username.trim() ||
     !password.trim();
@@ -200,13 +190,13 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
       onRequestClose={handleClose}
       testID="add_child_dialog"
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
         <View style={styles.dialog}>
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.title}>Create Child Account</Text>
+              <Text style={styles.title}>Add Child</Text>
               <Text style={styles.subtitle}>
-                Add username, password, and pick an avatar
+                Set name, password, and pick an avatar
               </Text>
             </View>
             <TouchableOpacity
@@ -234,14 +224,14 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
                 <Text style={styles.previewEmoji}>{selectedEmoji}</Text>
               </View>
               <Text style={styles.previewLabel}>
-                {username.trim() || 'New Explorer'}
+                {username.trim() || 'New Child'}
               </Text>
             </View>
 
-            {/* Child Username with Label + Real-time Check */}
+            {/* Child Name with Label + Real-time Check */}
             <View style={styles.fieldBlock}>
               <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Child Username *</Text>
+                <Text style={styles.inputLabel}>Child Name</Text>
                 {usernameStatus === 'checking' && (
                   <ActivityIndicator size="small" color="#0284C7" />
                 )}
@@ -252,8 +242,6 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
                   usernameStatus === 'available' && styles.inputSuccess,
                   usernameStatus === 'taken' && styles.inputError,
                 ]}
-                placeholder="Enter unique username (e.g. ali or zoya)"
-                placeholderTextColor="#94A3B8"
                 value={username}
                 onChangeText={handleUsernameChange}
                 autoCapitalize="none"
@@ -292,14 +280,12 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
               ) : null}
             </View>
 
-            {/* Child Secret Password with Label */}
+            {/* Child Password with Label */}
             <View style={styles.fieldBlock}>
-              <Text style={styles.inputLabel}>Child Secret Password *</Text>
+              <Text style={styles.inputLabel}>Password</Text>
               <View style={styles.passwordWrapper}>
                 <TextInput
                   style={[styles.input, styles.passwordInput]}
-                  placeholder="Enter password child uses to log in (e.g. 1234)"
-                  placeholderTextColor="#94A3B8"
                   value={password}
                   onChangeText={(t) => {
                     setPassword(t);
@@ -330,10 +316,35 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
               </View>
             ) : null}
 
-            {/* Color Palette */}
+            {/* Age Group */}
+            <Text style={styles.sectionLabel}>Age group:</Text>
+            <View style={styles.ageBandRow}>
+              {CHILD_AGE_BANDS.map((band) => {
+                const selected = ageGroup === band.ageGroup;
+                return (
+                  <TouchableOpacity
+                    key={band.label}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={[styles.ageBand, selected && styles.ageBandSelected]}
+                    onPress={() => setAgeGroup(band.ageGroup)}
+                  >
+                    <Text
+                      style={[
+                        styles.ageBandText,
+                        selected && styles.ageBandTextSelected,
+                      ]}
+                    >
+                      {band.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <Text style={styles.sectionLabel}>Avatar Background Color:</Text>
             <View style={styles.colorRow}>
-              {COLORS.map((color) => {
+              {CHILD_AVATAR_COLORS.map((color) => {
                 const isSelected = selectedColor === color;
                 return (
                   <TouchableOpacity
@@ -356,7 +367,7 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
             {/* Avatar Emoji Selector */}
             <Text style={styles.sectionLabel}>Select Avatar Character:</Text>
             <View style={styles.emojiGrid}>
-              {EMOJIS.map((emoji) => {
+              {CHILD_AVATARS.map((emoji) => {
                 const isSelected = selectedEmoji === emoji;
                 return (
                   <TouchableOpacity
@@ -397,7 +408,7 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
               {isCreating ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Text style={styles.confirmText}>Create Child Profile</Text>
+                <Text style={styles.confirmText}>Add Child</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -480,64 +491,45 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
     fontSize: 14,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#000000',
   },
   input: {
     minHeight: 52,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
     borderColor: '#CBD5E1',
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 13,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#0F172A',
-    backgroundColor: '#F8FAFC',
+    fontWeight: '700',
+    color: '#000000',
     backgroundColor: '#FFFFFF',
   },
   inputSuccess: {
-    borderColor: '#10B981',
-    backgroundColor: '#F0FDF4',
     borderColor: '#3A9BE8',
     backgroundColor: '#F0F9FF',
   },
   inputError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
     borderColor: '#FF6F61',
     backgroundColor: '#FFF5F5',
   },
   feedbackRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    gap: 4,
     marginTop: 6,
     gap: 6,
   },
   feedbackText: {
-    fontSize: 11,
     fontSize: 13,
     color: '#64748B',
-    fontWeight: '600',
     fontWeight: '700',
   },
   feedbackSuccess: {
-    color: '#059669',
     color: '#0284C7',
   },
   feedbackError: {
-    color: '#DC2626',
     color: '#FF6F61',
   },
   passwordWrapper: {
@@ -545,29 +537,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   passwordInput: {
-    paddingRight: 42,
     paddingRight: 50,
   },
   eyeBtn: {
     position: 'absolute',
-    right: 12,
     right: 8,
     top: 0,
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    width: 36,
     width: 44,
   },
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
     fontSize: 14,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#000000',
     marginTop: 14,
     marginBottom: 8,
+  },
+  ageBandRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  ageBand: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+  },
+  ageBandSelected: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+  },
+  ageBandText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  ageBandTextSelected: {
+    color: '#FFFFFF',
   },
   colorRow: {
     flexDirection: 'row',

@@ -19,3 +19,4 @@ export {
 } from './youtube';
 
 export { hexLongToColor, getInitial, withAlpha } from './color';
+export { copyToClipboard } from './clipboard';

@@ -1,9 +1,9 @@
 // src/features/timeout/AlmostTimeDialog.tsx
+import { ChildFontText as Text } from '../../components/ui/ChildFontText';
 
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,

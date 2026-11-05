@@ -8,6 +8,7 @@
 export enum ScreenState {
   SPLASH = 'SPLASH',
   CHILD_LOGIN = 'CHILD_LOGIN',
+  PARENT_AUTH = 'PARENT_AUTH',
   HOME = 'HOME',
   EXPLORE = 'EXPLORE',
   SEARCH = 'SEARCH',
@@ -17,6 +18,7 @@ export enum ScreenState {
   PROFILE = 'PROFILE',
   PARENT_PANEL = 'PARENT_PANEL',
   ADMIN_PANEL = 'ADMIN_PANEL',
+  DOWNLOADS_MANAGER = 'DOWNLOADS_MANAGER',
 }
 
 /**
@@ -26,6 +28,7 @@ export enum ScreenState {
 export type RootStackParamList = {
   [ScreenState.SPLASH]: undefined;
   [ScreenState.CHILD_LOGIN]: undefined;
+  [ScreenState.PARENT_AUTH]: { initialTab?: 'login' | 'register' | 'admin' } | undefined;
   [ScreenState.HOME]: undefined;
   [ScreenState.EXPLORE]: undefined;
   [ScreenState.SEARCH]: { previousScreen: ScreenState };
@@ -40,10 +43,14 @@ export type RootStackParamList = {
   [ScreenState.PLAYER]: {
     videoId: string;
     previousScreen: ScreenState;
+    sourceVideoIds?: string[];
+    isDownloads?: boolean;
+    category?: string;
   };
   [ScreenState.PROFILE]: undefined;
   [ScreenState.PARENT_PANEL]: undefined;
   [ScreenState.ADMIN_PANEL]: undefined;
+  [ScreenState.DOWNLOADS_MANAGER]: undefined;
 };
 
 /**
@@ -67,6 +74,7 @@ export enum ParentNavSection {
   CONTENT = 'CONTENT',
   SCREEN_TIME = 'SCREEN_TIME',
   PIN = 'PIN',
+  APPEARANCE = 'APPEARANCE',
   ACCOUNT = 'ACCOUNT',
 }
 

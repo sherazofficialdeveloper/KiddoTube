@@ -1,5 +1,6 @@
 const contentService = require('../services/contentService');
 const db = require('../models/db');
+const fs = require('node:fs');
 
 async function resolveParentId(req) {
   if (req.user) {
@@ -192,12 +193,65 @@ async function removeVideo(req, res, next) {
 let ytdlInstance = null;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function normalizeYoutubeCookie(value) {
+  const text = value?.trim()?.replace(/\\r\\n|\\n|\\r|\\t/g, (token) => {
+    if (token === '\\t') return '\t';
+    if (token === '\\n') return '\n';
+    return '\r';
+  });
+  if (!text) return undefined;
+  if (text.includes('\t')) return text;
+
+  // Some hosting panels flatten Netscape cookies.txt into one line and
+  // remove the tabs/newlines required by ytdl-core's Netscape parser.
+  const cookies = [];
+  const flattenedLine =
+    /(?:^|\s)(?:#HttpOnly_)?\.?youtube\.com\s+TRUE\s+\S+\s+TRUE\s+\d+\s+([^\s]+)\s+([^\s;]+)/g;
+  let match;
+  while ((match = flattenedLine.exec(text)) !== null) {
+    cookies.push(`${match[1]}=${match[2]}`);
+  }
+  if (cookies.length > 0) return cookies.join('; ');
+
+  // Also accept a Cookie header embedded in copied panel text.
+  const knownCookieNames =
+    /(?:^|[;\s])((?:SAPISID|APISID|SSID|HSID|SID|LSID|PSID|PSSID|YSC|VISITOR_INFO1_LIVE|__Secure-[^=\s;]+))=([^;\s]+)/g;
+  while ((match = knownCookieNames.exec(text)) !== null) {
+    cookies.push(`${match[1]}=${match[2]}`);
+  }
+  return cookies.length > 0 ? cookies.join('; ') : undefined;
+}
+
 function getYtdl() {
   if (!ytdlInstance) {
     const ytdl = require('@distube/ytdl-core');
+    let rawCookie = process.env.YT_COOKIE;
+    const cookieFile = process.env.YT_COOKIE_FILE?.trim();
+    if (!rawCookie && cookieFile) {
+      try {
+        rawCookie = fs.readFileSync(cookieFile, 'utf8');
+      } catch (error) {
+        console.warn(`[YouTube] Unable to read YT_COOKIE_FILE: ${error.message}`);
+      }
+    }
+    const cookie = normalizeYoutubeCookie(rawCookie);
+    const hasSignedInCookie =
+      typeof cookie === 'string' &&
+      /(?:^|;\s*)(?:SAPISID|__Secure-3PAPISID)=/i.test(cookie);
     ytdlInstance = new ytdl.Ytdl({
-      clients: [ytdl.Client.Tv, ytdl.Client.Mweb, ytdl.Client.WebEmbedded]
+      clients: [
+        ytdl.Client.WebCreator,
+        ytdl.Client.WebEmbedded,
+        ytdl.Client.Tv,
+        ytdl.Client.Mweb
+      ],
+      ...(hasSignedInCookie ? { cookie } : {})
     });
+    console.info(
+      `[YouTube] Downloader initialized with ${
+        hasSignedInCookie ? 'configured authentication cookie' : 'no valid authentication cookie'
+      }`
+    );
   }
   return ytdlInstance;
 }
@@ -212,14 +266,14 @@ async function streamVideo(req, res) {
     const client = getYtdl();
     let info;
     let lastInfoError;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
       try {
         info = await client.getInfo(youtubeId);
         break;
       } catch (error) {
         lastInfoError = error;
-        if (attempt < 2) {
-          await wait(750 * (attempt + 1));
+        if (attempt < 4) {
+          await wait(Math.min(4000, 750 * (attempt + 1)));
         }
       }
     }
@@ -240,65 +294,35 @@ async function streamVideo(req, res) {
       return res.status(404).json({ success: false, error: 'No stream format found for video' });
     }
 
-    const rangeHeader = req.headers.range;
-    let downloadOptions = { format: chosenFormat };
-
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', `attachment; filename="${youtubeId}.mp4"`);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-
-    if (rangeHeader && chosenFormat.contentLength) {
-      const totalSize = parseInt(chosenFormat.contentLength, 10);
-      const parts = rangeHeader.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const requestedEnd = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-      const end = Math.min(
-        Number.isFinite(requestedEnd) ? requestedEnd : totalSize - 1,
-        totalSize - 1
-      );
-
-      if (!isNaN(start) && start >= 0 && start <= end && start < totalSize) {
-        res.status(206);
-        res.setHeader('Content-Range', `bytes ${start}-${end}/${totalSize}`);
-        res.setHeader('Content-Length', end - start + 1);
-        downloadOptions.range = { start, end };
-      } else {
-        res.status(416);
-        res.setHeader('Content-Range', `bytes */${totalSize}`);
-        return res.end();
-      }
-    } else if (chosenFormat.contentLength) {
-      res.setHeader('Content-Length', chosenFormat.contentLength);
+    if (!chosenFormat.url) {
+      return res.status(502).json({
+        success: false,
+        error: 'YouTube returned a format without a downloadable URL'
+      });
     }
 
-    const stream = client.download(info, downloadOptions);
-    res.flushHeaders();
-
-    stream.on('response', (response) => {
-      if (response && response.headers && response.headers['content-length'] && !res.getHeader('Content-Length')) {
-        res.setHeader('Content-Length', response.headers['content-length']);
-      }
-    });
-
-    stream.on('error', (err) => {
-      console.warn(`[ytdl-stream error for ${youtubeId}]:`, err.message);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, error: err.message });
-      }
-    });
-
-    req.on('close', () => {
-      try {
-        if (typeof stream.destroy === 'function') stream.destroy();
-      } catch {}
-    });
-
-    stream.pipe(res);
+    // Do not proxy the complete media stream through Hostinger. Long-running
+    // proxied streams can be terminated by the hosting layer and leave the
+    // native downloader with a partial file. The signed CDN URL is freshly
+    // resolved for every request, so retries and Range requests get a fresh
+    // upstream URL.
+    res.setHeader('Content-Disposition', `attachment; filename="${youtubeId}.mp4"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(307, chosenFormat.url);
   } catch (err) {
     console.warn(`[ytdl stream exception for ${youtubeId}]:`, err.message);
     if (!res.headersSent) {
-      res.status(500).json({ success: false, error: err.message });
+      const errorText = String(err?.message || '');
+      const isBotCheck =
+        err?.code === 'BOT_CHECK' ||
+        /sign in to confirm.*not a bot|confirm you.?re not a bot/i.test(errorText);
+      res.status(isBotCheck ? 503 : 502).json({
+        success: false,
+        code: isBotCheck ? 'YOUTUBE_BOT_CHECK' : 'YOUTUBE_STREAM_UNAVAILABLE',
+        error: isBotCheck
+          ? 'YouTube rejected this server as automated traffic. Configure a valid YT_COOKIE on the backend or use an official YouTube playback path.'
+          : 'YouTube did not provide a downloadable stream. Please retry later.'
+      });
     }
   }
 }

@@ -5,6 +5,7 @@ import { Api } from '../services/api';
 import { secureStorage } from '../services/storage/secureStorage';
 import { useContentStore } from './contentStore';
 import { useScreenTimeStore } from './screenTimeStore';
+import { useSafeVolumeStore } from './safeVolumeStore';
 import type {
   ParentAccountDto,
   ParentDashboardDataDto,
@@ -49,6 +50,14 @@ interface ParentAdminState {
     identifier: string,
     password: string
   ) => Promise<{ success: boolean; error?: string }>;
+  forgotPassword: (
+    email: string
+  ) => Promise<{ success: boolean; message?: string; devOtp?: string; error?: string }>;
+  resetPasswordWithOtp: (
+    email: string,
+    otp: string,
+    newPassword: string
+  ) => Promise<{ success: boolean; message?: string; error?: string }>;
   registerParent: (
     username: string,
     email: string,
@@ -69,6 +78,10 @@ interface ParentAdminState {
   updateDailyLimit: (
     newLimit: number
   ) => Promise<{ success: boolean; error?: string }>;
+  updateChildDailyLimit: (
+    childId: string,
+    newLimit: number
+  ) => Promise<{ success: boolean; error?: string }>;
   updateParentPin: (
     currentPin: string | null,
     newPin: string
@@ -85,6 +98,9 @@ interface ParentAdminState {
     childId: string,
     newPass: string
   ) => Promise<{ success: boolean; error?: string }>;
+  getChildPassword: (
+    childId: string
+  ) => Promise<{ success: boolean; password?: string; error?: string }>;
   deleteChild: (
     childId: string
   ) => Promise<{ success: boolean; error?: string }>;
@@ -92,7 +108,8 @@ interface ParentAdminState {
     title: string,
     channelTitle: string,
     youtubeId: string,
-    category: string
+    category: string,
+    childIds?: string[]
   ) => Promise<{ success: boolean; error?: string }>;
   removeVideo: (
     id: string
@@ -101,7 +118,8 @@ interface ParentAdminState {
     title: string,
     channelUrlOrId: string,
     desc: string,
-    category?: string
+    category?: string,
+    childIds?: string[]
   ) => Promise<{ success: boolean; error?: string }>;
   removeChannel: (
     id: string
@@ -110,7 +128,8 @@ interface ParentAdminState {
     title: string,
     playlistUrlOrId: string,
     channelTitle: string,
-    category?: string
+    category?: string,
+    childIds?: string[]
   ) => Promise<{ success: boolean; error?: string }>;
   removePlaylist: (
     id: string
@@ -133,17 +152,25 @@ interface ParentAdminState {
     pin?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   toggleParentStatus: (
+    parentId: string,
+    status?: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  deleteAdminParent: (
     parentId: string
   ) => Promise<{ success: boolean; error?: string }>;
   fetchAdminChildren: (search?: string) => Promise<AdminChildItemDto[]>;
   toggleChildStatus: (
+    childId: string,
+    status?: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  deleteAdminChild: (
     childId: string
   ) => Promise<{ success: boolean; error?: string }>;
   fetchAdminContent: () => Promise<boolean>;
   moderateContent: (
-    type: string,
+    type: 'channel' | 'playlist' | 'video',
     id: string,
-    action: string
+    action: 'BLOCK' | 'REMOVE'
   ) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -166,8 +193,10 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
 
   loginParent: async (identifier, pass) => {
     try {
+      const clean = identifier.trim();
       const res = await Api.loginParent({
-        username: identifier.trim(),
+        username: clean,
+        email: clean,
         password: pass,
       });
       if (res.success && res.data && res.token) {
@@ -200,6 +229,30 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
           e.message ??
           'Unable to connect to server. Please check your network connection.',
       };
+    }
+  },
+
+  forgotPassword: async (email: string) => {
+    try {
+      const res = await Api.forgotPassword(email.trim());
+      if (res.success) {
+        return { success: true, message: res.message || 'OTP sent to your email', devOtp: res.devOtp };
+      }
+      return { success: false, error: res.error || 'Failed to send reset code' };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to send reset code' };
+    }
+  },
+
+  resetPasswordWithOtp: async (email: string, otp: string, newPassword: string) => {
+    try {
+      const res = await Api.resetPasswordWithOtp(email.trim(), otp.trim(), newPassword.trim());
+      if (res.success) {
+        return { success: true, message: res.message || 'Password reset successfully' };
+      }
+      return { success: false, error: res.error || 'Failed to reset password' };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to reset password' };
     }
   },
 
@@ -338,7 +391,7 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
         await get().fetchParentDashboard();
         try {
           await useContentStore.getState().initializeAppData();
-        } catch (_) {}
+        } catch {}
         return { success: true };
       }
       return {
@@ -354,6 +407,13 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     try {
       const res = await Api.updateDailyLimit({ dailyLimitMinutes: newLimit });
       if (res.success) {
+        set((state) => ({
+          dailyLimit: newLimit,
+          parentChildren: state.parentChildren.map((c) => ({
+            ...c,
+            dailyLimitMinutes: newLimit,
+          })),
+        }));
         await get().fetchParentDashboard();
         await get().fetchParentChildren();
         return { success: true };
@@ -367,9 +427,31 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     }
   },
 
+  updateChildDailyLimit: async (childId, newLimit) => {
+    try {
+      const res = await Api.updateChild(childId, { dailyLimitMinutes: newLimit });
+      if (res.success) {
+        set((state) => ({
+          parentChildren: state.parentChildren.map((c) =>
+            c.id === childId ? { ...c, dailyLimitMinutes: newLimit } : c
+          ),
+        }));
+        await get().fetchParentDashboard();
+        await get().fetchParentChildren();
+        return { success: true };
+      }
+      return {
+        success: false,
+        error: res.error ?? 'Failed to update child limit',
+      };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
   updateParentPin: async (currentPin, newPin) => {
     try {
-      const res = await Api.updatePin({ currentPin, newPin });
+      const res = await Api.updatePin({ currentPin: currentPin || undefined, newPin });
       if (res.success) {
         return { success: true };
       }
@@ -431,15 +513,31 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     }
   },
 
+  getChildPassword: async (childId) => {
+    try {
+      const res = await Api.getChildPassword(childId);
+      if (res.success && res.data?.password) {
+        return { success: true, password: res.data.password };
+      }
+      return {
+        success: false,
+        error: res.error ?? 'Unable to retrieve the child password',
+      };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
   deleteChild: async (childId) => {
     try {
       const res = await Api.deleteChild(childId);
       if (res.success) {
+        await useSafeVolumeStore.getState().remove(childId);
         await get().fetchParentChildren();
         await get().fetchParentDashboard();
         try {
           await useContentStore.getState().initializeAppData();
-        } catch (_) {}
+        } catch {}
         return { success: true };
       }
       return {
@@ -451,13 +549,14 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     }
   },
 
-  addVideo: async (title, channelTitle, youtubeId, category) => {
+  addVideo: async (title, channelTitle, youtubeId, category, childIds = []) => {
     try {
       const res = await Api.addVideo({
         title,
         channelTitle,
         youtubeUrlOrId: youtubeId,
         category,
+        childIds,
       });
       if (res.success) {
         await get().fetchParentDashboard();
@@ -482,13 +581,14 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     }
   },
 
-  addChannel: async (title, channelUrlOrId, desc, category) => {
+  addChannel: async (title, channelUrlOrId, desc, category, childIds = []) => {
     try {
       const res = await Api.addChannel({
         title,
         channelUrlOrId,
         description: desc,
         category: category || 'SHOWS',
+        childIds,
       });
       if (res.success) {
         await get().fetchParentDashboard();
@@ -513,13 +613,14 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     }
   },
 
-  addPlaylist: async (title, playlistUrlOrId, channelTitle, category) => {
+  addPlaylist: async (title, playlistUrlOrId, channelTitle, category, childIds = []) => {
     try {
       const res = await Api.addPlaylist({
         title,
         playlistUrlOrId,
         channelTitle,
         category: category || 'LEARNING',
+        childIds,
       });
       if (res.success) {
         await get().fetchParentDashboard();
@@ -564,10 +665,6 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
           secureStorage.clearChildToken(),
         ]);
         await secureStorage.setAdminToken(res.token);
-        await get().fetchAdminDashboard();
-        await get().fetchAdminParents();
-        await get().fetchAdminChildren();
-        await get().fetchAdminContent();
         return { success: true };
       }
       return {
@@ -619,13 +716,38 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     if (!token) return [];
     try {
       const res = await Api.getAdminParents(search);
-      if (res.success) {
-        set({ adminParents: res.data });
-        return res.data;
+      const responseData = res.data as unknown;
+      const parents = Array.isArray(responseData)
+        ? responseData
+        : Array.isArray((responseData as any)?.parents)
+        ? (responseData as any).parents
+        : Array.isArray((responseData as any)?.items)
+        ? (responseData as any).items
+        : Array.isArray((res as any).parents)
+        ? (res as any).parents
+        : [];
+      if (res.success && Array.isArray(parents)) {
+        const normalizedParents = parents
+          .filter(Boolean)
+          .map((parent: any) => ({
+            ...parent,
+            id: String(parent.id ?? parent._id ?? parent.parentId ?? ''),
+            username: String(parent.username ?? parent.email?.split('@')[0] ?? 'parent'),
+            displayName: parent.displayName ?? null,
+            childrenCount: Number(parent.childrenCount ?? 0),
+          }))
+          .filter((parent) => parent.id);
+        set({ adminParents: normalizedParents });
+        return normalizedParents;
       }
-      return [];
-    } catch {
-      return [];
+      console.warn(
+        '[ParentAdminStore] Admin parents response was unsuccessful:',
+        (res as any).error ?? 'Unexpected response shape'
+      );
+      return get().adminParents;
+    } catch (error: any) {
+      console.warn('[ParentAdminStore] Admin parents:', error?.message ?? error);
+      return get().adminParents;
     }
   },
 
@@ -646,9 +768,9 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     }
   },
 
-  toggleParentStatus: async (parentId) => {
+  toggleParentStatus: async (parentId, status) => {
     try {
-      const res = await Api.toggleParentStatus(parentId);
+      const res = await Api.toggleParentStatus(parentId, status);
       if (res.success) {
         await get().fetchAdminParents();
         await get().fetchAdminDashboard();
@@ -656,7 +778,24 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
       }
       return {
         success: false,
-        error: res.error ?? 'Failed to toggle status',
+        error: res.error ?? 'Failed to update status',
+      };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  deleteAdminParent: async (parentId) => {
+    try {
+      const res = await Api.deleteAdminParent(parentId);
+      if (res.success) {
+        await get().fetchAdminParents();
+        await get().fetchAdminDashboard();
+        return { success: true };
+      }
+      return {
+        success: false,
+        error: res.error ?? 'Failed to delete parent',
       };
     } catch (e: any) {
       return { success: false, error: e.message };
@@ -678,9 +817,9 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     }
   },
 
-  toggleChildStatus: async (childId) => {
+  toggleChildStatus: async (childId, status) => {
     try {
-      const res = await Api.toggleChildStatus(childId);
+      const res = await Api.toggleChildStatus(childId, status);
       if (res.success) {
         await get().fetchAdminChildren();
         await get().fetchAdminDashboard();
@@ -688,7 +827,25 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
       }
       return {
         success: false,
-        error: res.error ?? 'Failed to toggle status',
+        error: res.error ?? 'Failed to update status',
+      };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  deleteAdminChild: async (childId) => {
+    try {
+      const res = await Api.deleteAdminChild(childId);
+      if (res.success) {
+        await useSafeVolumeStore.getState().remove(childId);
+        await get().fetchAdminChildren();
+        await get().fetchAdminDashboard();
+        return { success: true };
+      }
+      return {
+        success: false,
+        error: res.error ?? 'Failed to delete child',
       };
     } catch (e: any) {
       return { success: false, error: e.message };
@@ -716,12 +873,30 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
 
   moderateContent: async (type, id, action) => {
     try {
+      if (!get().adminToken) {
+        return { success: false, error: 'Admin authentication is required' };
+      }
       const res = await Api.moderateContent({
-        type: type as any,
+        type,
         id,
-        action: action as any,
+        action,
       });
       if (res.success) {
+        if (action === 'REMOVE') {
+          if (type === 'video') {
+            set((state) => ({
+              adminVideos: state.adminVideos.filter((video) => video.id !== id),
+            }));
+          } else if (type === 'channel') {
+            set((state) => ({
+              adminChannels: state.adminChannels.filter((channel) => channel.id !== id),
+            }));
+          } else {
+            set((state) => ({
+              adminPlaylists: state.adminPlaylists.filter((playlist) => playlist.id !== id),
+            }));
+          }
+        }
         await get().fetchAdminContent();
         await get().fetchAdminDashboard();
         return { success: true };

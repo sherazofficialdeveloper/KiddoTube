@@ -1,87 +1,127 @@
 // src/theme/ThemeProvider.tsx
 
-import React, { createContext, useContext, useMemo, ReactNode } from 'react';
-import { useColorScheme, View, StyleSheet } from 'react-native';
-import { Colors } from './colors';
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import { AppState, useColorScheme, View, StyleSheet } from 'react-native';
+import { LightPalette, ThemePalette, getAppColors } from './colors';
 import { Typography } from './typography';
 import { Dimensions } from './dimensions';
+import { isDarkModeScheduled, useThemeStore, ThemeMode } from '../store/themeStore';
 
 /**
- * KidsStream Theme Provider
- * Migrated from Kotlin Theme.kt
- * 
+ * KidsStream & KiddoTube Theme Provider
  * Supports:
- * - Light mode (default)
- * - Night mode (forced during Timeout lock)
- * - System color scheme detection
+ * - Dynamic Light / Dark mode via user selection in Menu
+ * - System appearance following
+ * - Automatic background & typography adaptation
  */
 
 export interface KidsTheme {
   isNightMode: boolean;
-  colors: typeof Colors;
+  isDark: boolean;
+  themeMode: ThemeMode;
+  colors: ThemePalette;
   typography: typeof Typography;
   dimensions: typeof Dimensions;
 }
 
 interface ThemeContextValue {
   theme: KidsTheme;
-  toggleTheme?: () => void;
+  colors: ThemePalette;
+  isDark: boolean;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 interface ThemeProviderProps {
   children: ReactNode;
-  /**
-   * Force night mode (used by TimeoutScreen lock)
-   * When true, uses timeoutNight* colors
-   */
   isNightMode?: boolean;
-  /**
-   * Follow system color scheme when isNightMode is undefined
-   */
   followSystem?: boolean;
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   children,
   isNightMode,
-  followSystem = false,
+  followSystem = true,
 }) => {
   const systemColorScheme = useColorScheme();
+  const themeMode = useThemeStore((s) => s.themeMode);
+  const setThemeMode = useThemeStore((s) => s.setThemeMode);
+  const appearanceScheduleEnabled = useThemeStore((s) => s.appearanceScheduleEnabled);
+  const darkModeStart = useThemeStore((s) => s.darkModeStart);
+  const lightModeStart = useThemeStore((s) => s.lightModeStart);
+  const [scheduleNow, setScheduleNow] = useState(() => new Date());
 
-  const effectiveNightMode = useMemo(() => {
-    // Priority 1: Explicit isNightMode prop (Timeout lock)
+  useEffect(() => {
+    const refreshSchedule = () => setScheduleNow(new Date());
+    const timer = setInterval(refreshSchedule, 30_000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshSchedule();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, []);
+
+  const isDark = useMemo(() => {
+    // 1. Force lock night mode
     if (isNightMode !== undefined) {
       return isNightMode;
     }
-    // Priority 2: Follow system (if enabled)
+    if (appearanceScheduleEnabled) {
+      return isDarkModeScheduled(scheduleNow, darkModeStart, lightModeStart);
+    }
+    // 2. User explicit selection from Menu
+    if (themeMode === 'dark') {
+      return true;
+    }
+    if (themeMode === 'light') {
+      return false;
+    }
+    // 3. System mode
     if (followSystem && systemColorScheme === 'dark') {
       return true;
     }
-    // Default: Light mode
     return false;
-  }, [isNightMode, followSystem, systemColorScheme]);
+  }, [
+    isNightMode,
+    appearanceScheduleEnabled,
+    darkModeStart,
+    lightModeStart,
+    scheduleNow,
+    themeMode,
+    followSystem,
+    systemColorScheme,
+  ]);
+
+  const colors = useMemo(() => getAppColors(isDark), [isDark]);
+
+  const toggleTheme = () => {
+    setThemeMode(isDark ? 'light' : 'dark');
+  };
 
   const theme: KidsTheme = useMemo(
     () => ({
-      isNightMode: effectiveNightMode,
-      colors: Colors,
+      isNightMode: isDark,
+      isDark,
+      themeMode,
+      colors,
       typography: Typography,
       dimensions: Dimensions,
     }),
-    [effectiveNightMode]
+    [isDark, themeMode, colors]
   );
 
   return (
-    <ThemeContext.Provider value={{ theme }}>
+    <ThemeContext.Provider value={{ theme, colors, isDark, themeMode, setThemeMode, toggleTheme }}>
       <View
         style={[
           styles.root,
           {
-            backgroundColor: effectiveNightMode
-              ? Colors.timeoutNightBackground
-              : Colors.kidsBackground,
+            backgroundColor: colors.background,
           },
         ]}
       >
@@ -97,42 +137,41 @@ const styles = StyleSheet.create({
   },
 });
 
-/**
- * Hook to access theme in any component
- * 
- * Usage:
- * const { theme } = useKidsTheme();
- * theme.colors.kidsPrimary
- * theme.typography.titleLarge
- * theme.dimensions.spaceMedium
- */
 export const useKidsTheme = (): ThemeContextValue => {
   const context = useContext(ThemeContext);
   if (!context) {
-    throw new Error('useKidsTheme must be used within a ThemeProvider');
+    // Fallback if rendered outside provider during standalone tests
+    const defaultDark = false;
+    const defaultColors = LightPalette;
+    return {
+      theme: {
+        isNightMode: defaultDark,
+        isDark: defaultDark,
+        themeMode: 'light',
+        colors: defaultColors,
+        typography: Typography,
+        dimensions: Dimensions,
+      },
+      colors: defaultColors,
+      isDark: defaultDark,
+      themeMode: 'light',
+      setThemeMode: () => {},
+      toggleTheme: () => {},
+    };
   }
   return context;
 };
 
-/**
- * Convenience hook for accessing only colors
- */
-export const useColors = () => {
-  const { theme } = useKidsTheme();
-  return theme.colors;
+export const useColors = (): ThemePalette => {
+  const { colors } = useKidsTheme();
+  return colors;
 };
 
-/**
- * Convenience hook for accessing only typography
- */
 export const useTypography = () => {
   const { theme } = useKidsTheme();
   return theme.typography;
 };
 
-/**
- * Convenience hook for accessing only dimensions
- */
 export const useDimensions = () => {
   const { theme } = useKidsTheme();
   return theme.dimensions;

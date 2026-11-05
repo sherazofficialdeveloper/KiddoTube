@@ -1,42 +1,31 @@
 // src/features/parent-dashboard/ParentPinManagementView.tsx
+import { FontText as Text, FontTextInput as TextInput } from '../../components/ui/FontText';
 
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ScrollView,
+  Alert,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { Colors } from '../../theme/colors';
-import { Typography } from '../../theme/typography';
-
-/**
- * ParentPinManagementView
- * Migrated from Kotlin ParentPanelScreen.kt → ParentPinManagementView
- * 
- * Fields: current PIN, new PIN, confirm new PIN
- * Validation: new PIN must be 4 digits and match confirm
- */
 
 interface ParentPinManagementViewProps {
-  onUpdatePin: (currentPin: string, newPin: string) => void;
+  onUpdatePin: (currentPin: string, newPin: string) => Promise<any> | void;
 }
 
-export const ParentPinManagementView: React.FC<
-  ParentPinManagementViewProps
-> = ({ onUpdatePin }) => {
-  const [curPin, setCurPin] = useState('');
+export const ParentPinManagementView: React.FC<ParentPinManagementViewProps> = ({
+  onUpdatePin,
+}) => {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [showCurPin, setShowCurPin] = useState(false);
   const [showNewPin, setShowNewPin] = useState(false);
   const [showConfirmPin, setShowConfirmPin] = useState(false);
   const [errText, setErrText] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (newPin.length !== 4) {
       setErrText('PIN must be exactly 4 digits');
       return;
@@ -45,11 +34,18 @@ export const ParentPinManagementView: React.FC<
       setErrText('New PIN and confirmation do not match');
       return;
     }
-    onUpdatePin(curPin, newPin);
-    setCurPin('');
-    setNewPin('');
-    setConfirmPin('');
+    setIsSaving(true);
     setErrText(null);
+    try {
+      await onUpdatePin('', newPin);
+      setNewPin('');
+      setConfirmPin('');
+      Alert.alert('Security PIN Updated', 'Your new 4-digit PIN has been set successfully!');
+    } catch (e: any) {
+      setErrText(e.message || 'Failed to update PIN');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -60,105 +56,94 @@ export const ParentPinManagementView: React.FC<
     >
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <MaterialIcons name="key" size={20} color="#7C3AED" />
-          <MaterialIcons name="key" size={22} color={Colors.kidsSkyBlue} />
-          <Text style={styles.cardTitle}>Security PIN Management</Text>
+          <View style={styles.iconCircle}>
+            <MaterialIcons name="vpn-key" size={24} color="#0284C7" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.cardTitle}>Set or Reset Security PIN</Text>
+            <Text style={styles.cardSubtitle}>
+              Protect parental controls and time extensions
+            </Text>
+          </View>
         </View>
 
         <Text style={styles.explanation}>
-          Set a 4-digit PIN to protect time extensions and adult settings.
-          Leave the current PIN blank if you have not set one yet.
+          Enter a new 4-digit PIN below. You can change or reset your PIN at any time without entering your old PIN.
         </Text>
 
-        <View style={styles.pinWrap}>
-          <TextInput
-            style={[styles.input, styles.pinInput]}
-            placeholder="Current PIN (leave blank if not set)"
-            placeholderTextColor="#94A3B8"
-            value={curPin}
-            onChangeText={(t) => {
-              setCurPin(t.replace(/[^0-9]/g, '').slice(0, 4));
-              setErrText(null);
-            }}
-            keyboardType="number-pad"
-            maxLength={4}
-            secureTextEntry={!showCurPin}
-          />
-          <TouchableOpacity
-            style={styles.eyeBtn}
-            onPress={() => setShowCurPin(!showCurPin)}
-            accessibilityLabel="Toggle current PIN visibility"
-          >
-            <MaterialIcons
-              name={showCurPin ? 'visibility-off' : 'visibility'}
-              size={20}
-              color="#64748B"
+        <View style={styles.fieldBlock}>
+          <Text style={styles.inputLabel}>New 4-Digit PIN</Text>
+          <View style={styles.pinWrap}>
+            <TextInput
+              style={[styles.input, styles.pinInput]}
+              value={newPin}
+              onChangeText={(t) => {
+                setNewPin(t.replace(/[^0-9]/g, '').slice(0, 4));
+                setErrText(null);
+              }}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry={!showNewPin}
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowNewPin(!showNewPin)}
+              accessibilityLabel="Toggle new PIN visibility"
+            >
+              <MaterialIcons
+                name={showNewPin ? 'visibility-off' : 'visibility'}
+                size={22}
+                color="#64748B"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.pinWrap}>
-          <TextInput
-            style={[styles.input, styles.pinInput]}
-            placeholder="New 4-Digit PIN"
-            placeholderTextColor="#94A3B8"
-            value={newPin}
-            onChangeText={(t) => {
-              setNewPin(t.replace(/[^0-9]/g, '').slice(0, 4));
-              setErrText(null);
-            }}
-            keyboardType="number-pad"
-            maxLength={4}
-            secureTextEntry={!showNewPin}
-          />
-          <TouchableOpacity
-            style={styles.eyeBtn}
-            onPress={() => setShowNewPin(!showNewPin)}
-            accessibilityLabel="Toggle new PIN visibility"
-          >
-            <MaterialIcons
-              name={showNewPin ? 'visibility-off' : 'visibility'}
-              size={20}
-              color="#64748B"
+        <View style={styles.fieldBlock}>
+          <Text style={styles.inputLabel}>Confirm New 4-Digit PIN</Text>
+          <View style={styles.pinWrap}>
+            <TextInput
+              style={[styles.input, styles.pinInput]}
+              value={confirmPin}
+              onChangeText={(t) => {
+                setConfirmPin(t.replace(/[^0-9]/g, '').slice(0, 4));
+                setErrText(null);
+              }}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry={!showConfirmPin}
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowConfirmPin(!showConfirmPin)}
+              accessibilityLabel="Toggle confirm PIN visibility"
+            >
+              <MaterialIcons
+                name={showConfirmPin ? 'visibility-off' : 'visibility'}
+                size={22}
+                color="#64748B"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.pinWrap}>
-          <TextInput
-            style={[styles.input, styles.pinInput]}
-            placeholder="Confirm New PIN"
-            placeholderTextColor="#94A3B8"
-            value={confirmPin}
-            onChangeText={(t) => {
-              setConfirmPin(t.replace(/[^0-9]/g, '').slice(0, 4));
-              setErrText(null);
-            }}
-            keyboardType="number-pad"
-            maxLength={4}
-            secureTextEntry={!showConfirmPin}
-          />
-          <TouchableOpacity
-            style={styles.eyeBtn}
-            onPress={() => setShowConfirmPin(!showConfirmPin)}
-            accessibilityLabel="Toggle confirm PIN visibility"
-          >
-            <MaterialIcons
-              name={showConfirmPin ? 'visibility-off' : 'visibility'}
-              size={20}
-              color="#64748B"
-            />
-          </TouchableOpacity>
-        </View>
-
-        {errText ? <Text style={styles.errorText}>{errText}</Text> : null}
+        {errText ? (
+          <View style={styles.errorBox}>
+            <MaterialIcons name="error-outline" size={18} color="#DC2626" />
+            <Text style={styles.errorText}>{errText}</Text>
+          </View>
+        ) : null}
 
         <TouchableOpacity
-          style={styles.submitButton}
+          style={[styles.submitButton, isSaving && styles.submitButtonDisabled]}
           activeOpacity={0.85}
           onPress={handleSubmit}
+          disabled={isSaving}
         >
-          <Text style={styles.submitText}>Update PIN Securely</Text>
+          <MaterialIcons name="check" size={20} color="#FFFFFF" />
+          <Text style={styles.submitText}>
+            {isSaving ? 'Saving PIN...' : 'Save New PIN Directly'}
+          </Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -172,98 +157,113 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 6,
+    elevation: 3,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardTitle: {
-    ...Typography.titleMedium,
+    fontSize: 18,
+    fontWeight: '900',
     color: '#0F172A',
+  },
+  cardSubtitle: {
+    fontSize: 13,
     fontWeight: '700',
-    marginLeft: 8,
+    color: '#000000',
+    marginTop: 2,
   },
   explanation: {
-    ...Typography.bodySmall,
-    color: '#64748B',
-    ...Typography.bodyMedium,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-    marginTop: 8,
-    marginBottom: 12,
-    marginBottom: 14,
+    fontWeight: '700',
+    color: '#000000',
     lineHeight: 20,
+    marginBottom: 20,
   },
-  input: {
-    borderWidth: 1,
-    minHeight: 52,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  fieldBlock: {
+    marginBottom: 16,
+  },
+  inputLabel: {
     fontSize: 14,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginTop: 10,
-    backgroundColor: '#FFFFFF',
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 6,
   },
   pinWrap: {
-    width: '100%',
     position: 'relative',
     justifyContent: 'center',
-    marginTop: 10,
+  },
+  input: {
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: 4,
   },
   pinInput: {
-    marginTop: 0,
-    paddingRight: 44,
-    paddingRight: 50,
+    paddingRight: 48,
   },
   eyeBtn: {
     position: 'absolute',
-    right: 8,
-    top: 0,
-    bottom: 0,
-    width: 40,
-    width: 44,
+    right: 14,
+    padding: 6,
+  },
+  errorBox: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
   },
   errorText: {
     color: '#DC2626',
-    fontSize: 12,
     fontSize: 13,
-    fontWeight: '700',
-    marginTop: 8,
+    fontWeight: '800',
+    flex: 1,
   },
   submitButton: {
-    marginTop: 20,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: '#7C3AED',
-    minHeight: 52,
-    borderRadius: 14,
-    backgroundColor: Colors.kidsSkyBlue,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#0284C7',
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 8,
+    gap: 8,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
   submitText: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-    fontWeight: '800',
     fontSize: 16,
+    fontWeight: '900',
   },
 });

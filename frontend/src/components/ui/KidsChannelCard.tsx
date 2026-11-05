@@ -1,9 +1,9 @@
 // src/components/ui/KidsChannelCard.tsx
+import { ChildFontText as Text } from './ChildFontText';
 
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Image,

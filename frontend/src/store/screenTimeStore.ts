@@ -28,6 +28,7 @@ export interface ScreenTimeState {
   isTimerActive: boolean;
   isLocked: boolean;
   isAlmostTimeWarningShown: boolean;
+  pendingWarningMinutes: 5 | 1 | null;
 }
 
 interface ScreenTimeStoreState extends ScreenTimeState {
@@ -45,6 +46,8 @@ interface ScreenTimeStoreState extends ScreenTimeState {
   _failedAttempts: number;
   _lockoutTimestamp: number;
   _pendingSyncSeconds: number;
+  _warning5Shown: boolean;
+  _warning1Shown: boolean;
 
   // Actions
   initializeForChild: (
@@ -75,6 +78,7 @@ const initialScreenTime: ScreenTimeState = {
   isTimerActive: false,
   isLocked: false,
   isAlmostTimeWarningShown: false,
+  pendingWarningMinutes: null,
 };
 
 export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
@@ -91,6 +95,8 @@ export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
   _failedAttempts: 0,
   _lockoutTimestamp: 0,
   _pendingSyncSeconds: 0,
+  _warning5Shown: false,
+  _warning1Shown: false,
 
   /**
    * Initialize from backend
@@ -206,6 +212,12 @@ export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
       });
 
       if (res.success && res.session) {
+        set({
+          pendingWarningMinutes: null,
+          isAlmostTimeWarningShown: false,
+          _warning5Shown: false,
+          _warning1Shown: false,
+        });
         applyServerSession(res.session, set);
         return { success: true };
       }
@@ -241,6 +253,9 @@ export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
       tempExtensionMinutes: state.tempExtensionMinutes + extensionMinutes,
       isLocked: false,
       isAlmostTimeWarningShown: false,
+      pendingWarningMinutes: null,
+      _warning5Shown: false,
+      _warning1Shown: false,
     }));
     get().recomputeDerived();
   },
@@ -253,6 +268,7 @@ export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
     const state = get();
     if (state.isLocked) return;
 
+    const previousRemainingSeconds = state.remainingSeconds;
     const newSecondsWatched = state.secondsWatched + seconds;
     const totalAllowedSeconds = state.totalAllowedMinutes * 60;
     const shouldLock = newSecondsWatched >= totalAllowedSeconds;
@@ -262,6 +278,20 @@ export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
       isLocked: shouldLock,
     });
     get().recomputeDerived();
+    const nextRemainingSeconds = get().remainingSeconds;
+    const warningMinutes =
+      previousRemainingSeconds > 5 * 60 &&
+      nextRemainingSeconds <= 5 * 60 &&
+      !get()._warning5Shown
+        ? 5
+        : previousRemainingSeconds > 1 * 60 &&
+          nextRemainingSeconds <= 1 * 60 &&
+          !get()._warning1Shown
+        ? 1
+        : null;
+    if (warningMinutes !== null) {
+      set({ pendingWarningMinutes: warningMinutes });
+    }
 
     const newPending = state._pendingSyncSeconds + seconds;
     set({ _pendingSyncSeconds: newPending });
@@ -279,7 +309,13 @@ export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
         })
           .then((res) => {
             if (res.success && res.session) {
-              applyServerSession(res.session, set);
+              const latest = get();
+              if (
+                res.session.secondsWatched >= latest.secondsWatched ||
+                res.session.isTimeUp
+              ) {
+                applyServerSession(res.session, set);
+              }
             }
           })
           .catch((e) => {
@@ -290,7 +326,13 @@ export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
   },
 
   dismissAlmostTimeWarning: () => {
-    set({ isAlmostTimeWarningShown: true });
+    const warning = get().pendingWarningMinutes;
+    set({
+      isAlmostTimeWarningShown: true,
+      pendingWarningMinutes: null,
+      ...(warning === 5 ? { _warning5Shown: true } : {}),
+      ...(warning === 1 ? { _warning1Shown: true } : {}),
+    });
   },
 
   clearSession: () => {
@@ -302,6 +344,8 @@ export const useScreenTimeStore = create<ScreenTimeStoreState>((set, get) => ({
       _pendingSyncSeconds: 0,
       _failedAttempts: 0,
       _lockoutTimestamp: 0,
+      _warning5Shown: false,
+      _warning1Shown: false,
     });
     get().recomputeDerived();
   },
@@ -345,6 +389,16 @@ function applyServerSession(
     tempExtensionMinutes: dto.tempExtensionMinutes,
     isLocked,
     isAlmostTimeWarningShown: isLocked,
+    pendingWarningMinutes:
+      !isLocked &&
+      totalAllowed * 60 - currentWatched <= 60 &&
+      !useScreenTimeStore.getState()._warning1Shown
+        ? 1
+        : !isLocked &&
+          totalAllowed * 60 - currentWatched <= 5 * 60 &&
+          !useScreenTimeStore.getState()._warning5Shown
+        ? 5
+        : null,
   });
 
   // Trigger derived recompute

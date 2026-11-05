@@ -1,9 +1,9 @@
 // src/features/parental/ParentsPasscodeModal.tsx
+import { ChildFontText as Text } from '../../components/ui/ChildFontText';
 
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useScreenTimeStore } from '../../store/screenTimeStore';
+import { useParentAdminStore } from '../../store/parentAdminStore';
+import { KiddoTubeLogo } from '../../components/branding';
 
 /**
  * ParentsPasscodeModal
@@ -40,11 +42,17 @@ export const ParentsPasscodeModal: React.FC<ParentsPasscodeModalProps> = ({
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isResetMode, setIsResetMode] = useState(false);
+  const [resetStep, setResetStep] = useState<1 | 2>(1);
+  const [newPinDraft, setNewPinDraft] = useState('');
 
   const verifyParentPin = useScreenTimeStore((s) => s.verifyParentPin);
 
   const handleClose = () => {
     setPin('');
+    setIsResetMode(false);
+    setResetStep(1);
+    setNewPinDraft('');
     setErrorMessage(null);
     setIsLoading(false);
     onDismiss();
@@ -53,6 +61,49 @@ export const ParentsPasscodeModal: React.FC<ParentsPasscodeModalProps> = ({
   const handleDigitPress = async (digit: string) => {
     if (isLoading || pin.length >= 4) return;
     setErrorMessage(null);
+
+    if (isResetMode) {
+      if (resetStep === 1) {
+        const updated = pin + digit;
+        setPin(updated);
+        if (updated.length === 4) {
+          setNewPinDraft(updated);
+          setPin('');
+          setResetStep(2);
+        }
+      } else {
+        const updated = pin + digit;
+        setPin(updated);
+        if (updated.length === 4) {
+          if (updated !== newPinDraft) {
+            setErrorMessage('Passcodes do not match. Please try again.');
+            setPin('');
+            setResetStep(1);
+            setNewPinDraft('');
+            return;
+          }
+          setIsLoading(true);
+          try {
+            const res = await useParentAdminStore.getState().updateParentPin('', updated);
+            setIsLoading(false);
+            if (res.success) {
+              Alert.alert('Passcode Updated', 'Your new 4-digit passcode is active!');
+              setIsResetMode(false);
+              onSuccess(updated);
+            } else {
+              setErrorMessage(res.error || 'Failed to update passcode.');
+              setPin('');
+            }
+          } catch (e: any) {
+            setIsLoading(false);
+            setErrorMessage(e.message || 'Failed to update passcode.');
+            setPin('');
+          }
+        }
+      }
+      return;
+    }
+
     const updated = pin + digit;
     setPin(updated);
 
@@ -93,11 +144,11 @@ export const ParentsPasscodeModal: React.FC<ParentsPasscodeModalProps> = ({
   };
 
   const handleForgottenPasscode = () => {
-    Alert.alert(
-      'Forgotten Passcode',
-      'Please sign into your Parent Account on the login screen to manage or change your 4-digit PIN.',
-      [{ text: 'OK' }]
-    );
+    setIsResetMode(true);
+    setResetStep(1);
+    setPin('');
+    setNewPinDraft('');
+    setErrorMessage(null);
   };
 
   return (
@@ -111,10 +162,7 @@ export const ParentsPasscodeModal: React.FC<ParentsPasscodeModalProps> = ({
         {/* Yellow Header with Brand Branding (Matching Screenshot 3) */}
         <View style={styles.topYellowHeader}>
           <View style={styles.headerBrandRow}>
-            <View style={styles.brandBadge}>
-              <MaterialIcons name="play-arrow" size={16} color="#FFFFFF" />
-            </View>
-            <Text style={styles.brandKids}>Kids</Text>
+            <KiddoTubeLogo size="small" showTagline={false} />
           </View>
           <View style={styles.headerDoodle}>
             <MaterialIcons name="star" size={14} color="#D97706" />
@@ -136,9 +184,13 @@ export const ParentsPasscodeModal: React.FC<ParentsPasscodeModalProps> = ({
           </View>
 
           {/* Heading */}
-          <Text style={styles.title}>Parents only</Text>
+          <Text style={styles.title}>{isResetMode ? 'Reset Passcode' : 'Parents only'}</Text>
           <Text style={styles.subtitle}>
-            To access, please enter your passcode
+            {isResetMode
+              ? resetStep === 1
+                ? 'Enter your new 4-digit passcode'
+                : 'Confirm your new 4-digit passcode'
+              : 'To access, please enter your passcode'}
           </Text>
 
           {/* Passcode Indicator Row (4 dashes + backspace icon) */}
@@ -204,14 +256,6 @@ export const ParentsPasscodeModal: React.FC<ParentsPasscodeModalProps> = ({
               <View style={styles.keypadEmptySpace} />
             </View>
           </View>
-
-          {/* Forgotten passcode link */}
-          <TouchableOpacity
-            onPress={handleForgottenPasscode}
-            style={styles.forgottenLinkWrap}
-          >
-            <Text style={styles.forgottenLinkText}>Forgotten passcode?</Text>
-          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -249,21 +293,6 @@ const styles = StyleSheet.create({
   headerBrandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  brandBadge: {
-    width: 32,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: '#FF0000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandKids: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#212121',
-    marginLeft: 6,
-    letterSpacing: -0.5,
   },
   headerDoodle: {
     padding: 4,
@@ -388,4 +417,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

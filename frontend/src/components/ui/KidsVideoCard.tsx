@@ -1,9 +1,9 @@
 // src/components/ui/KidsVideoCard.tsx
+import { ChildFontText as Text } from './ChildFontText';
 
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Image,
@@ -25,11 +25,21 @@ import type { VideoItem } from '../../types/models';
 interface KidsVideoCardProps {
   video: VideoItem;
   onClick: () => void;
+  isDownloading?: boolean;
+  downloadProgress?: number;
+  isDownloaded?: boolean;
+  onDeleteDownload?: () => void;
+  onMoreClick?: (video: VideoItem) => void;
 }
 
 export const KidsVideoCard: React.FC<KidsVideoCardProps> = ({
   video,
   onClick,
+  isDownloading = false,
+  downloadProgress = 0,
+  isDownloaded = false,
+  onDeleteDownload,
+  onMoreClick,
 }) => {
   const duration = formatVideoDuration(video.durationText);
 
@@ -59,9 +69,30 @@ export const KidsVideoCard: React.FC<KidsVideoCardProps> = ({
             <MaterialIcons name="favorite" size={14} color="#EF4444" />
           </View>
         )}
+
+        {/* Downloaded Badge (top-right) */}
+        {isDownloaded && !isDownloading && (
+          <View style={styles.downloadedBadge}>
+            <MaterialIcons name="check-circle" size={12} color="#10B981" />
+            <Text style={styles.downloadedBadgeText}>Saved</Text>
+          </View>
+        )}
+
+        {/* Downloading Progress Overlay */}
+        {isDownloading && (
+          <View style={styles.downloadingOverlay}>
+            <View style={styles.downloadingBadge}>
+              <MaterialIcons name="cloud-download" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.downloadingText}>Downloading {downloadProgress}%</Text>
+            </View>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${Math.min(100, Math.max(0, downloadProgress))}%` }]} />
+            </View>
+          </View>
+        )}
       </View>
 
-      {/* Info Row: Title & Subtitle + 3-dots button */}
+      {/* Info Row: Title & Subtitle + Action buttons */}
       <View style={styles.infoRow}>
         <View style={styles.textColumn}>
           <Text
@@ -81,11 +112,23 @@ export const KidsVideoCard: React.FC<KidsVideoCardProps> = ({
           </Text>
         </View>
 
+        {/* Delete Download Button (if provided) */}
+        {onDeleteDownload && (
+          <TouchableOpacity
+            style={styles.deleteDownloadBtn}
+            activeOpacity={0.7}
+            onPress={onDeleteDownload}
+            accessibilityLabel="Delete downloaded video"
+          >
+            <MaterialIcons name="delete-outline" size={22} color="#EF4444" />
+          </TouchableOpacity>
+        )}
+
         {/* Three-dots menu */}
         <TouchableOpacity
           style={styles.menuButton}
           activeOpacity={0.6}
-          onPress={onClick}
+          onPress={onMoreClick ? () => onMoreClick(video) : onClick}
         >
           <MaterialIcons
             name="more-vert"
@@ -102,14 +145,16 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 24,
+    borderWidth: 8,
+    borderColor: '#FFFFFF',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-    marginBottom: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 18,
   },
   thumbnailWrap: {
     width: '100%',
@@ -166,15 +211,16 @@ const styles = StyleSheet.create({
     paddingRight: 6,
   },
   title: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: '#1E1E1E',
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: '#000000',
   },
   channelName: {
     fontSize: 13,
-    color: '#606060',
-    marginTop: 3,
+    color: '#000000',
+    fontWeight: '700',
+    marginTop: 4,
   },
   menuButton: {
     width: 28,
@@ -182,5 +228,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
+  },
+  downloadedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  downloadedBadgeText: {
+    color: '#10B981',
+    fontSize: 11,
+    fontWeight: '800',
+    marginLeft: 4,
+  },
+  downloadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  downloadingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  downloadingText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  progressTrack: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#38BDF8',
+    borderRadius: 3,
+  },
+  deleteDownloadBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
   },
 });

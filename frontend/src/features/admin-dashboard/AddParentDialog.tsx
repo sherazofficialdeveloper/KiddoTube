@@ -1,4 +1,5 @@
 // src/features/admin-dashboard/AddParentDialog.tsx
+import { FontText as Text, FontTextInput as TextInput } from '../../components/ui/FontText';
 
 import React, { useState } from 'react';
 import {
@@ -6,8 +7,6 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -33,23 +32,21 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
   onConfirm,
 }) => {
   const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [dailyLimit, setDailyLimit] = useState('60');
-  const [pin, setPin] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const resetState = () => {
     setUsername('');
-    setDisplayName('');
     setEmail('');
     setPassword('');
-    setDailyLimit('60');
-    setPin('');
+    setConfirmPassword('');
     setIsPasswordVisible(false);
+    setIsConfirmPasswordVisible(false);
     setIsSubmitting(false);
     setErrorMessage(null);
   };
@@ -63,7 +60,7 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
     const cleanUser = username.trim();
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = password.trim();
-    const cleanPin = pin.trim();
+    const cleanConfirm = confirmPassword.trim();
 
     if (!cleanUser) {
       setErrorMessage('Please enter a username for the parent account.');
@@ -82,20 +79,17 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
       return;
     }
     if (!cleanPass) {
-      setErrorMessage('Please enter an initial password.');
+      setErrorMessage('Please enter a password.');
       return;
     }
     if (cleanPass.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.');
+      setErrorMessage('Password must be at least 6 characters long.');
       return;
     }
-    if (cleanPin && !/^\d{4}$/.test(cleanPin)) {
-      setErrorMessage('PIN must be exactly 4 digits, or left empty.');
+    if (cleanPass !== cleanConfirm) {
+      setErrorMessage('Passwords do not match. Please re-check.');
       return;
     }
-
-    const limitNum = parseInt(dailyLimit, 10);
-    const validLimit = isNaN(limitNum) || limitNum < 1 ? 60 : limitNum;
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -103,11 +97,8 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
     try {
       const result = await onConfirm({
         username: cleanUser,
-        displayName: displayName.trim() || cleanUser,
         email: cleanEmail,
         password: cleanPass,
-        dailyLimitMinutes: validLimit,
-        pin: cleanPin || undefined,
       });
 
       if (result.success) {
@@ -135,9 +126,9 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Add Parent Account</Text>
+              <Text style={styles.title}>Create Parent Account</Text>
               <Text style={styles.subtitle}>
-                Create credentials for a new parent user
+                Register a new parent credentials profile
               </Text>
             </View>
             <TouchableOpacity
@@ -156,11 +147,9 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
           >
             {/* Username */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Parent Username *</Text>
+              <Text style={styles.label}>Parent Username</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. sarah_parent"
-                placeholderTextColor="#94A3B8"
                 value={username}
                 onChangeText={(t) => {
                   setUsername(t);
@@ -171,25 +160,11 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
               />
             </View>
 
-            {/* Display Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Full Name / Display Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Sarah Jenkins"
-                placeholderTextColor="#94A3B8"
-                value={displayName}
-                onChangeText={setDisplayName}
-              />
-            </View>
-
             {/* Email */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email Address *</Text>
+              <Text style={styles.label}>Parent Email</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. sarah@example.com"
-                placeholderTextColor="#94A3B8"
                 value={email}
                 onChangeText={(t) => {
                   setEmail(t);
@@ -203,12 +178,10 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
 
             {/* Password */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Account Password * (Min 6 chars)</Text>
-              <View style={styles.passwordWrap}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.passwordWrapper}>
                 <TextInput
                   style={[styles.input, styles.passwordInput]}
-                  placeholder="Set account password"
-                  placeholderTextColor="#94A3B8"
                   value={password}
                   onChangeText={(t) => {
                     setPassword(t);
@@ -232,63 +205,61 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
               </View>
             </View>
 
-            {/* Daily Screen Time Limit */}
+            {/* Confirm Password */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Daily Screen Time Limit (Minutes)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="60"
-                placeholderTextColor="#94A3B8"
-                value={dailyLimit}
-                onChangeText={setDailyLimit}
-                keyboardType="numeric"
-              />
+              <Text style={styles.label}>Confirm Password</Text>
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  value={confirmPassword}
+                  onChangeText={(t) => {
+                    setConfirmPassword(t);
+                    setErrorMessage(null);
+                  }}
+                  secureTextEntry={!isConfirmPasswordVisible}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}
+                  accessibilityLabel="Toggle confirm password visibility"
+                >
+                  <MaterialIcons
+                    name={isConfirmPasswordVisible ? 'visibility-off' : 'visibility'}
+                    size={20}
+                    color="#64748B"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* 4-digit PIN */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Parent Gate PIN (Optional, 4 digits)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 1234"
-                placeholderTextColor="#94A3B8"
-                value={pin}
-                onChangeText={setPin}
-                keyboardType="numeric"
-                maxLength={4}
-              />
-            </View>
-
-            {/* Error banner */}
-            {errorMessage && (
+            {/* Error Message */}
+            {errorMessage ? (
               <View style={styles.errorBox}>
-                <MaterialIcons name="error-outline" size={18} color="#DC2626" />
+                <MaterialIcons name="error-outline" size={16} color="#DC2626" />
                 <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
-            )}
+            ) : null}
 
-            {/* Buttons */}
-            <View style={styles.actionRow}>
+            {/* Actions */}
+            <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
                 onPress={handleClose}
                 disabled={isSubmitting}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+                style={[styles.confirmBtn, isSubmitting && styles.confirmBtnDisabled]}
                 onPress={handleSubmit}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <>
-                    <MaterialIcons name="person-add" size={18} color="#FFFFFF" />
-                    <Text style={styles.submitBtnText}>Create Parent</Text>
-                  </>
+                  <Text style={styles.confirmText}>Create Parent Account</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -302,23 +273,23 @@ export const AddParentDialog: React.FC<AddParentDialogProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
   },
   dialog: {
-    width: '100%',
-    maxWidth: 480,
-    maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    width: '100%',
+    maxWidth: 440,
+    maxHeight: '90%',
+    padding: 22,
     elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
   },
   header: {
     flexDirection: 'row',
@@ -328,12 +299,13 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Typography.titleLarge,
-    fontWeight: '900',
-    color: '#0F172A',
+    color: '#000000',
+    fontWeight: '800',
   },
   subtitle: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#000000',
+    fontWeight: '700',
     marginTop: 2,
   },
   closeBtn: {
@@ -346,105 +318,85 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
     fontSize: 14,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#000000',
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    backgroundColor: '#FFFFFF',
-    minHeight: 52,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
     borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontWeight: '700',
+    color: '#000000',
+    backgroundColor: '#FFFFFF',
   },
-  passwordWrap: {
+  passwordWrapper: {
     position: 'relative',
     justifyContent: 'center',
   },
   passwordInput: {
-    paddingRight: 44,
-    paddingRight: 50,
+    paddingRight: 48,
   },
   eyeBtn: {
     position: 'absolute',
     right: 12,
-    right: 8,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 4,
-    width: 44,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
     borderWidth: 1,
-    borderRadius: 10,
+    borderColor: '#FECACA',
+    borderRadius: 12,
     padding: 10,
     marginBottom: 14,
     gap: 8,
   },
   errorText: {
-    flex: 1,
-    fontSize: 13,
     color: '#DC2626',
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '800',
+    flex: 1,
   },
-  actionRow: {
+  actions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: 12,
-    marginTop: 8,
+    marginTop: 10,
   },
   cancelBtn: {
-    flex: 1,
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
   },
-  cancelBtnText: {
+  cancelText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#64748B',
   },
-  submitBtn: {
-    flex: 2,
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#3A9BE8',
+  confirmBtn: {
     paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 12,
+    backgroundColor: '#0284C7',
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 2,
   },
-  submitBtnDisabled: {
+  confirmBtnDisabled: {
     opacity: 0.6,
   },
-  submitBtnText: {
+  confirmText: {
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
   },
 });
-

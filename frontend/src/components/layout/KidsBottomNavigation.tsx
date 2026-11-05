@@ -1,23 +1,24 @@
-// src/components/layout/KidsBottomNavigation.tsx
-
 import React from 'react';
+import { FontText as Text } from '../ui/FontText';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import type { MaterialIconsIconName } from 'react-native-vector-icons/MaterialIcons';
-import { Colors } from '../../theme/colors';
+import { useKidsTheme } from '../../theme/ThemeProvider';
 import { ChildTab } from '../../types/navigation';
 
 /**
  * KidsBottomNavigation
- * Migrated 1:1 from Kotlin KidsBottomNavigation.kt
  * 
- * 4 tabs: Home, Explore, Search, Profile
- * Profile tab shows avatar emoji instead of icon
+ * 4 tabs:
+ * 1. Home
+ * 2. Search
+ * 3. Your stuff (Explore)
+ * 4. Menu (Contains Profile, Appearance Light/Dark mode, Bedtime, Care Settings)
  */
 
 interface TabMeta {
@@ -32,7 +33,7 @@ const TABS: TabMeta[] = [
     tab: ChildTab.HOME,
     label: 'Home',
     activeIcon: 'home',
-    inactiveIcon: 'home',
+    inactiveIcon: 'home-filled',
   },
   {
     tab: ChildTab.SEARCH,
@@ -62,11 +63,25 @@ interface KidsBottomNavigationProps {
 
 export const KidsBottomNavigation: React.FC<KidsBottomNavigationProps> = ({
   selectedTab,
-  profileEmoji = '🥷',
+  profileEmoji = '🐰',
   onTabSelected,
 }) => {
+  const { colors, isDark } = useKidsTheme();
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 6);
+
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: isDark ? colors.bottomNavBg : '#FFFFFF',
+          borderTopColor: isDark ? colors.bottomNavBorder : '#E2E8F0',
+          paddingBottom: bottomPad,
+          height: 60 + bottomPad,
+        },
+      ]}
+    >
       <View style={styles.row}>
         {TABS.map((meta) => {
           const isSelected = meta.tab === selectedTab;
@@ -75,27 +90,28 @@ export const KidsBottomNavigation: React.FC<KidsBottomNavigationProps> = ({
             <TouchableOpacity
               key={meta.tab}
               style={styles.tab}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
               onPress={() => onTabSelected(meta.tab)}
               testID={`nav_tab_${meta.tab.toLowerCase()}`}
             >
               {meta.tab === ChildTab.PROFILE ? (
-                // Profile avatar pill
+                // Profile tab with child's avatar preview circle (no menu badge)
                 <View
                   style={[
-                    styles.profileAvatar,
-                    isSelected && styles.profileAvatarSelected,
+                    styles.menuBadgeWrap,
+                    isSelected && {
+                      borderColor: '#E52E2E',
+                      backgroundColor: isDark ? '#334155' : '#FEE2E2',
+                    },
                   ]}
                 >
-                  <Text style={styles.profileEmoji}>{profileEmoji}</Text>
+                  <Text style={styles.menuBadgeEmoji}>{profileEmoji}</Text>
                 </View>
               ) : (
                 <MaterialIcons
                   name={isSelected ? meta.activeIcon : meta.inactiveIcon}
                   size={26}
-                  color={
-                    isSelected ? Colors.kidsTextPrimary : Colors.kidsTextMuted
-                  }
+                  color={isSelected ? '#E52E2E' : '#000000'}
                 />
               )}
 
@@ -103,10 +119,8 @@ export const KidsBottomNavigation: React.FC<KidsBottomNavigationProps> = ({
                 style={[
                   styles.tabLabel,
                   {
-                    color: isSelected
-                      ? Colors.kidsTextPrimary
-                      : Colors.kidsTextMuted,
-                    fontWeight: isSelected ? '700' : '400',
+                    color: isSelected ? '#E52E2E' : '#000000',
+                    fontWeight: '800',
                   },
                 ]}
               >
@@ -123,10 +137,9 @@ export const KidsBottomNavigation: React.FC<KidsBottomNavigationProps> = ({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    height: 68,
-    backgroundColor: '#FFFFFF',
+    borderTopWidth: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
+    shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 8,
@@ -144,23 +157,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 4,
   },
-  profileAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#E9D5FF',
+  menuBadgeWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  menuBadgeEmoji: {
+    fontSize: 18,
+  },
+  menuIndicatorDot: {
+    position: 'absolute',
+    bottom: -2,
+    right: -3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#3A9BE8',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  profileAvatarSelected: {
-    borderWidth: 2,
-    borderColor: Colors.kidsPrimary,
-  },
-  profileEmoji: {
-    fontSize: 14,
-  },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 13,
+    fontFamily: 'Nunito-Bold',
+    fontWeight: '800',
     marginTop: 2,
+    color: '#000000',
   },
 });

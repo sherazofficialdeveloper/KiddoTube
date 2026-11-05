@@ -1,8 +1,8 @@
 // src/components/ui/Toast.tsx
+import { ChildFontText as Text } from './ChildFontText';
 
 import React, { useEffect } from 'react';
 import {
-  Text,
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';

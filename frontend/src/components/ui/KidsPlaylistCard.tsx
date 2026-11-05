@@ -1,9 +1,9 @@
 // src/components/ui/KidsPlaylistCard.tsx
+import { ChildFontText as Text } from './ChildFontText';
 
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Image,
@@ -24,15 +24,17 @@ import type { PlaylistItem } from '../../types/models';
 interface KidsPlaylistCardProps {
   playlist: PlaylistItem;
   onClick: () => void;
+  fullWidth?: boolean;
 }
 
 export const KidsPlaylistCard: React.FC<KidsPlaylistCardProps> = ({
   playlist,
   onClick,
+  fullWidth = false,
 }) => {
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, fullWidth && styles.fullWidthCard]}
       activeOpacity={0.9}
       onPress={onClick}
       testID={`playlist_card_${playlist.id}`}
@@ -85,6 +87,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
+  },
+  fullWidthCard: {
+    width: '100%',
   },
   thumbnailWrap: {
     width: '100%',

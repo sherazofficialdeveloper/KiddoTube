@@ -3,6 +3,8 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import {
   getActiveBaseUrl,
+  getLocalApiBaseUrl,
+  getProductionApiBaseUrl,
   API_CONFIG,
 } from '../../app/config/env';
 
@@ -44,12 +46,27 @@ const createApiClient = (): AxiosInstance => {
   // Request interceptor — inject auth token
   // Maps to OkHttp logging + auth interceptor
   client.interceptors.request.use(
-    (config: InternalAxiosRequestConfig) => {
+    async (config: InternalAxiosRequestConfig) => {
+      if (config.headers.Authorization) {
+        return config;
+      }
+      let token: string | null = null;
       if (tokenProvider) {
-        const token = tokenProvider();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
+        try {
+          token = tokenProvider();
+        } catch {}
+      }
+      if (!token) {
+        try {
+          const { secureStorage } = require('../storage/secureStorage');
+          token =
+            (await secureStorage.getParentToken()) ||
+            (await secureStorage.getAdminToken()) ||
+            (await secureStorage.getChildToken());
+        } catch {}
+      }
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
     },
@@ -100,11 +117,23 @@ const createApiClient = (): AxiosInstance => {
 export const apiClient: AxiosInstance = createApiClient();
 
 /**
- * Fallback client (localhost) — for iOS simulator
+ * Fallback / Local Development Client (configured from .env)
  * Maps to Kotlin fallbackApiService
  */
 export const fallbackClient: AxiosInstance = axios.create({
-  baseURL: 'http://127.0.0.1:4000/',
+  baseURL: getLocalApiBaseUrl(),
+  timeout: API_CONFIG.readTimeout,
+  headers: {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  },
+});
+
+/**
+ * Dedicated Production Client instance (configured from .env)
+ */
+export const productionClient: AxiosInstance = axios.create({
+  baseURL: getProductionApiBaseUrl(),
   timeout: API_CONFIG.readTimeout,
   headers: {
     'Content-Type': 'application/json',

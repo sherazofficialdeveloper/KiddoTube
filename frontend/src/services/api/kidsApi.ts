@@ -12,6 +12,7 @@ import type {
   AdminLoginRequest,
   AdminAuthResponse,
   GenericActionResponse,
+  ChildPasswordResponse,
   ChildProfilesResponse,
   ApprovedContentResponse,
   ScreenTimeResponse,
@@ -68,6 +69,28 @@ export const loginParent = async (
   const { data } = await apiClient.post<ParentAuthResponse>(
     '/api/auth/parent/login',
     request
+  );
+  return data;
+};
+
+export const forgotPassword = async (
+  email: string
+): Promise<GenericActionResponse & { devOtp?: string }> => {
+  const { data } = await apiClient.post<GenericActionResponse & { devOtp?: string }>(
+    '/api/auth/parent/forgot-password',
+    { email }
+  );
+  return data;
+};
+
+export const resetPasswordWithOtp = async (
+  email: string,
+  otp: string,
+  newPassword: string
+): Promise<GenericActionResponse> => {
+  const { data } = await apiClient.post<GenericActionResponse>(
+    '/api/auth/parent/reset-password-otp',
+    { email, otp, newPassword }
   );
   return data;
 };
@@ -221,6 +244,15 @@ export const removeChannel = async (
   return data;
 };
 
+export const syncChannel = async (
+  id: string
+): Promise<{ success: boolean; addedCount: number; totalVideos: number; message: string }> => {
+  const { data } = await apiClient.post<{ success: boolean; addedCount: number; totalVideos: number; message: string }>(
+    `/api/content/channel/${id}/sync`
+  );
+  return data;
+};
+
 export const addPlaylist = async (
   request: AddPlaylistRequest
 ): Promise<GenericActionResponse> => {
@@ -329,6 +361,15 @@ export const resetChildPassword = async (
   return data;
 };
 
+export const getChildPassword = async (
+  childId: string
+): Promise<ChildPasswordResponse> => {
+  const { data } = await apiClient.get<ChildPasswordResponse>(
+    `/api/parent/children/${childId}/password`
+  );
+  return data;
+};
+
 export const deleteChild = async (
   childId: string
 ): Promise<GenericActionResponse> => {
@@ -407,10 +448,21 @@ export const createParentByAdmin = async (
 };
 
 export const toggleParentStatus = async (
-  parentId: string
+  parentId: string,
+  status?: string
 ): Promise<GenericActionResponse> => {
   const { data } = await apiClient.patch<GenericActionResponse>(
-    `/api/admin/parents/${parentId}/toggle-status`
+    `/api/admin/parents/${parentId}/toggle-status`,
+    status ? { status } : {}
+  );
+  return data;
+};
+
+export const deleteAdminParent = async (
+  parentId: string
+): Promise<GenericActionResponse> => {
+  const { data } = await apiClient.delete<GenericActionResponse>(
+    `/api/admin/parents/${parentId}`
   );
   return data;
 };
@@ -426,10 +478,21 @@ export const getAdminChildren = async (
 };
 
 export const toggleChildStatus = async (
-  childId: string
+  childId: string,
+  status?: string
 ): Promise<GenericActionResponse> => {
   const { data } = await apiClient.patch<GenericActionResponse>(
-    `/api/admin/children/${childId}/toggle-status`
+    `/api/admin/children/${childId}/toggle-status`,
+    status ? { status } : {}
+  );
+  return data;
+};
+
+export const deleteAdminChild = async (
+  childId: string
+): Promise<GenericActionResponse> => {
+  const { data } = await apiClient.delete<GenericActionResponse>(
+    `/api/admin/children/${childId}`
   );
   return data;
 };
@@ -461,6 +524,8 @@ export const Api = {
   // Auth
   registerParent,
   loginParent,
+  forgotPassword,
+  resetPasswordWithOtp,
   loginChild,
   loginAdmin,
   logout,
@@ -478,6 +543,7 @@ export const Api = {
   searchContent,
   addChannel,
   removeChannel,
+  syncChannel,
   addPlaylist,
   removePlaylist,
   addVideo,
@@ -490,6 +556,7 @@ export const Api = {
   createChild,
   updateChild,
   resetChildPassword,
+  getChildPassword,
   deleteChild,
   updateDailyLimit,
   updatePin,
@@ -500,8 +567,10 @@ export const Api = {
   getAdminParents,
   createParentByAdmin,
   toggleParentStatus,
+  deleteAdminParent,
   getAdminChildren,
   toggleChildStatus,
+  deleteAdminChild,
   getAdminContent,
   moderateContent,
 };

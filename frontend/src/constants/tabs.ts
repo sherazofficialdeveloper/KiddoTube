@@ -30,6 +30,11 @@ export const CATEGORY_TABS: CategoryTabMeta[] = [
     label: getVideoCategoryDisplayName(VideoCategory.ALL),
   },
   {
+    category: VideoCategory.DOWNLOADS,
+    icon: 'file-download',
+    label: getVideoCategoryDisplayName(VideoCategory.DOWNLOADS),
+  },
+  {
     category: VideoCategory.SHOWS,
     icon: 'movie',
     label: getVideoCategoryDisplayName(VideoCategory.SHOWS),

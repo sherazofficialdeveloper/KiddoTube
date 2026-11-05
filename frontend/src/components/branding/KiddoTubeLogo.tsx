@@ -1,8 +1,12 @@
-// src/components/branding/KiddoTubeLogo.tsx
+
+import { ChildFontText as Text } from '../ui/ChildFontText';
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import {
+  View,
+  StyleSheet,
+  Image,
+} from 'react-native';
 
 export type LogoPalette = 'original' | 'playful-lagoon' | 'cozy-sunset';
 export type LogoSize = 'small' | 'medium' | 'large' | 'icon-only';
@@ -16,99 +20,77 @@ interface KiddoTubeLogoProps {
 const PALETTES = {
   original: {
     sunYellow: '#FFC93C',
-    skyBlue: '#3A9BE8',
-    coral: '#FF6F61',
-    navyText: '#1E293B',
+    skyBlue: '#0284C7',
+    coral: '#E52E2E',
+    navyText: '#000000',
     white: '#FFFFFF',
-    taglineColor: '#64748B',
+    taglineColor: '#000000',
   },
   'playful-lagoon': {
     sunYellow: '#FFB703',
     skyBlue: '#0284C7',
-    coral: '#FB7185',
-    navyText: '#0F172A',
+    coral: '#E52E2E',
+    navyText: '#000000',
     white: '#FFFFFF',
-    taglineColor: '#475569',
+    taglineColor: '#000000',
   },
   'cozy-sunset': {
     sunYellow: '#FDE047',
-    skyBlue: '#2563EB',
-    coral: '#F43F5E',
-    navyText: '#18181B',
+    skyBlue: '#0284C7',
+    coral: '#E52E2E',
+    navyText: '#000000',
     white: '#FFFFFF',
-    taglineColor: '#71717A',
+    taglineColor: '#000000',
   },
 };
 
+const LOGO_IMAGE = require('../../assets/images/KiddoTube_App_Icon.jpg');
+
 export const KiddoTubeLogo: React.FC<KiddoTubeLogoProps> = ({
   size = 'medium',
-  palette = 'cozy-sunset',
+  palette = 'original',
   showTagline = true,
 }) => {
-  const p = PALETTES[palette] || PALETTES['cozy-sunset'];
+  const p = PALETTES[palette] || PALETTES.original;
 
   const isIconOnly = size === 'icon-only';
   const isSmall = size === 'small';
   const isLarge = size === 'large';
 
-  const badgeSize = isSmall ? 36 : isLarge ? 80 : 54;
-  const playSize = isSmall ? 20 : isLarge ? 44 : 30;
-  const titleSize = isSmall ? 18 : isLarge ? 34 : 26;
-  const taglineSize = isSmall ? 9 : isLarge ? 13 : 11;
+  // Sizing matching privacy.html logo proportions.
+  const badgeSize = isSmall ? 42 : isLarge ? 84 : 54;
+  const titleSize = isSmall ? 27 : isLarge ? 38 : 28;
+  const taglineSize = isSmall ? 11 : isLarge ? 14 : 12;
 
   return (
     <View style={styles.container}>
-      {/* Concept 3: Flying Sun App Icon Emblem */}
+      {/* Logo App Icon */}
       <View
         style={[
-          styles.badgeOuter,
+          styles.badgeWrap,
           {
             width: badgeSize,
             height: badgeSize,
-            borderRadius: badgeSize * 0.32,
-            backgroundColor: p.sunYellow,
+            borderRadius: badgeSize * 0.28,
             shadowColor: p.coral,
           },
         ]}
       >
-        {/* Flying Sun decorative rays / wings */}
-        <View style={styles.sunRaysWrap}>
-          <View
-            style={[
-              styles.sunRayPill,
-              { backgroundColor: p.coral, transform: [{ rotate: '-45deg' }] },
-            ]}
-          />
-          <View
-            style={[
-              styles.sunRayPill,
-              { backgroundColor: p.coral, transform: [{ rotate: '45deg' }] },
-            ]}
-          />
-        </View>
-
-        {/* Inner Sky Blue Lens with Play Triangle */}
-        <View
+        <Image
+          source={LOGO_IMAGE}
           style={[
-            styles.badgeInner,
+            styles.badgeImage,
             {
-              width: badgeSize * 0.68,
-              height: badgeSize * 0.68,
-              borderRadius: badgeSize * 0.34,
-              backgroundColor: p.skyBlue,
+              width: badgeSize,
+              height: badgeSize,
+              borderRadius: badgeSize * 0.28,
             },
           ]}
-        >
-          <MaterialIcons
-            name="play-arrow"
-            size={playSize}
-            color={p.white}
-            style={{ marginLeft: 2 }}
-          />
-        </View>
+          resizeMode="cover"
+        />
       </View>
 
-      {/* Typography Lockup: KiddoTube + Tagline */}
+      {/* Typography Lockup: Kiddo + Tube Badge + Tagline */}
       {!isIconOnly && (
         <View style={styles.textColumn}>
           <View style={styles.brandRow}>
@@ -123,14 +105,15 @@ export const KiddoTubeLogo: React.FC<KiddoTubeLogoProps> = ({
             >
               Kiddo
             </Text>
+
             <View
               style={[
                 styles.tubeBadge,
                 {
                   backgroundColor: p.coral,
-                  borderRadius: titleSize * 0.3,
-                  paddingHorizontal: titleSize * 0.32,
-                  paddingVertical: titleSize * 0.08,
+                  borderRadius: 8,
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
                 },
               ]}
             >
@@ -138,7 +121,7 @@ export const KiddoTubeLogo: React.FC<KiddoTubeLogoProps> = ({
                 style={[
                   styles.brandTube,
                   {
-                    fontSize: titleSize * 0.95,
+                    fontSize: Math.round(titleSize * 0.78),
                     color: p.white,
                   },
                 ]}
@@ -158,7 +141,7 @@ export const KiddoTubeLogo: React.FC<KiddoTubeLogoProps> = ({
                 },
               ]}
             >
-              Safe screens. Big smiles.
+              Hand-picked video
             </Text>
           )}
         </View>
@@ -171,9 +154,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
-  badgeOuter: {
+
+  badgeWrap: {
     justifyContent: 'center',
     alignItems: 'center',
     shadowOffset: { width: 0, height: 4 },
@@ -181,52 +165,47 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
     overflow: 'hidden',
-    position: 'relative',
+    backgroundColor: '#FFC93C',
   },
-  sunRaysWrap: {
-    position: 'absolute',
+
+  badgeImage: {
     width: '100%',
     height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  sunRayPill: {
-    position: 'absolute',
-    width: '120%',
-    height: '18%',
-    borderRadius: 999,
-    opacity: 0.15,
-  },
-  badgeInner: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3,
-  },
+
   textColumn: {
     justifyContent: 'center',
   },
+
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
+
+  // Matches privacy.html: Fredoka, weight 700, letter spacing -0.5.
   brandKiddo: {
-    fontWeight: '900',
+    fontFamily: 'FredokaBold',
+    fontWeight: '800',
+    fontStyle: 'normal',
     letterSpacing: -0.5,
   },
+
   tubeBadge: {
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  // Same Fredoka bold typography as Kiddo.
   brandTube: {
-    fontWeight: '900',
+    fontFamily: 'FredokaBold',
+    fontWeight: '700',
+    fontStyle: 'normal',
     letterSpacing: -0.5,
   },
+
   tagline: {
+    fontFamily: 'Nunito-Bold',
     fontWeight: '700',
     letterSpacing: 0.3,
     marginTop: 2,

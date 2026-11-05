@@ -1,9 +1,9 @@
 // src/features/parent-dashboard/ParentDashboardView.tsx
+import { FontText as Text } from '../../components/ui/FontText';
 
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -33,15 +33,26 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
   onNavigate,
   onRefresh,
 }) => {
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const stats = dashboardData?.stats;
   const dailyLimit = stats?.dailyLimitMinutes ?? 60;
   const watched = stats?.todayTotalWatchedMinutes ?? 0;
   const videosCount = stats?.totalApprovedVideos ?? 0;
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
+
   return (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      decelerationRate={0.92}
     >
       {/* Family card */}
       <View style={styles.familyCard}>
@@ -53,8 +64,18 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
             </Text>
           </View>
 
-          <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-            <MaterialIcons name="refresh" size={22} color="#38BDF8" />
+          <TouchableOpacity
+            onPress={handleRefresh}
+            style={styles.refreshButton}
+            accessibilityLabel="Refresh family data"
+            disabled={isRefreshing}
+          >
+            <MaterialIcons
+              name="refresh"
+              size={24}
+              color="#38BDF8"
+              style={isRefreshing ? { opacity: 0.5 } : undefined}
+            />
           </TouchableOpacity>
         </View>
 
@@ -72,7 +93,6 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
           title="Manage Children"
           subtitle="Add, edit, credentials"
           icon="manage-accounts"
-          color="#0284C7"
           color={Colors.kidsSkyBlue}
           onPress={() => onNavigate(ParentNavSection.CHILDREN)}
         />
@@ -80,7 +100,6 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
           title="Approved Media"
           subtitle={`${videosCount} videos approved`}
           icon="video-library"
-          color="#059669"
           color={Colors.kidsCoral}
           onPress={() => onNavigate(ParentNavSection.CONTENT)}
         />
@@ -91,7 +110,6 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
           title="Daily Limit"
           subtitle="Applies to all kids"
           icon="timer"
-          color="#D97706"
           color={Colors.kidsSunnyYellow}
           onPress={() => onNavigate(ParentNavSection.SCREEN_TIME)}
         />
@@ -99,7 +117,6 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
           title="Parent PIN"
           subtitle="Update security PIN"
           icon="key"
-          color="#7C3AED"
           color={Colors.kidsSkyBlue}
           onPress={() => onNavigate(ParentNavSection.PIN)}
         />
@@ -107,7 +124,6 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
 
       {/* Info banner */}
       <View style={styles.infoBanner}>
-        <MaterialIcons name="shield" size={24} color="#0284C7" />
         <MaterialIcons name="shield" size={24} color={Colors.kidsSkyBlue} />
         <Text style={styles.infoText}>
           All controls synchronize live with our central Node.js backend.
@@ -216,8 +232,9 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     ...Typography.titleMedium,
-    color: '#1E293B',
-    fontWeight: '700',
+    color: '#000000',
+    fontSize: 18,
+    fontWeight: '900',
     marginBottom: 12,
   },
   row: {
@@ -228,7 +245,7 @@ const styles = StyleSheet.create({
   quickCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -237,22 +254,23 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   quickIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
   quickTitle: {
-    fontWeight: '700',
-    fontSize: 15,
-    color: '#1E293B',
+    fontWeight: '900',
+    fontSize: 16,
+    color: '#000000',
   },
   quickSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#000000',
+    marginTop: 4,
   },
   infoBanner: {
     flexDirection: 'row',

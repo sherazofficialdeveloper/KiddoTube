@@ -1,9 +1,9 @@
 // src/features/playlist/PlaylistDetailsScreen.tsx
+import { ChildFontText as Text } from '../../components/ui/ChildFontText';
 
 import React, { useMemo } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Image,
@@ -111,6 +111,7 @@ export const PlaylistDetailsScreen: React.FC<PlaylistDetailsScreenProps> = ({
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        decelerationRate={0.92}
       >
         {/* Hero card */}
         <View style={styles.heroCard}>

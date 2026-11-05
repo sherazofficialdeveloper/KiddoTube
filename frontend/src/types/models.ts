@@ -7,6 +7,7 @@
 
 export enum VideoCategory {
   ALL = 'ALL',
+  DOWNLOADS = 'DOWNLOADS',
   SHOWS = 'SHOWS',
   MUSIC = 'MUSIC',
   LEARNING = 'LEARNING',
@@ -21,6 +22,7 @@ export enum VideoCategory {
 export const getVideoCategoryDisplayName = (category: VideoCategory): string => {
   const map: Record<VideoCategory, string> = {
     [VideoCategory.ALL]: 'All',
+    [VideoCategory.DOWNLOADS]: 'Downloads',
     [VideoCategory.SHOWS]: 'Shows',
     [VideoCategory.MUSIC]: 'Music',
     [VideoCategory.LEARNING]: 'Learning',
@@ -41,9 +43,13 @@ export interface VideoItem {
   category: VideoCategory;
   description?: string;
   viewCountText?: string;
+  createdAt?: string;
+  childIds?: string[];
   isBlocked?: boolean;
   isFavorite?: boolean;
   likesCount?: number;
+  localUri?: string;
+  videoUrl?: string;
 }
 
 export interface ChannelItem {
@@ -53,6 +59,7 @@ export interface ChannelItem {
   videoCount: number;
   colorAccentHex: number;
   description?: string;
+  childIds?: string[];
   isBlocked?: boolean;
 }
 
@@ -63,6 +70,7 @@ export interface PlaylistItem {
   thumbnailUrl: string;
   videoCount: number;
   videoIds?: string[];
+  childIds?: string[];
   isBlocked?: boolean;
 }
 
@@ -72,6 +80,7 @@ export interface ChildProfile {
   username?: string;
   avatarEmoji: string;
   colorHex: number;
+  ageGroup?: number;
   dailyLimitMinutes: number;
   minutesWatchedToday: number;
   parentId?: string;

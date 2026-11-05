@@ -1,9 +1,9 @@
 // src/features/admin-dashboard/AdminOverviewView.tsx
+import { FontText as Text } from '../../components/ui/FontText';
 
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -11,24 +11,38 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
+import { AdminSection } from '../../types/navigation';
 import type { AdminStatsDto } from '../../types/api';
 
 /**
  * AdminOverviewView
- * Migrated from Kotlin AdminPanelScreen.kt → AdminOverviewView
+ * Clean light UI with official KiddoTube logo colors (Red, Amber, Royal Blue, White)
  * 
- * System health + stats grid + security audit
+ * System health + stats grid + interactive card navigation to Parents & Children
  */
 
 interface AdminOverviewViewProps {
   stats: AdminStatsDto | null;
   onRefresh: () => void;
+  onNavigateSection?: (section: AdminSection, subTab?: 'video' | 'channel' | 'playlist') => void;
 }
 
 export const AdminOverviewView: React.FC<AdminOverviewViewProps> = ({
   stats,
   onRefresh,
+  onNavigateSection,
 }) => {
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
+
   const s: AdminStatsDto =
     stats ?? {
       totalParents: 0,
@@ -50,23 +64,34 @@ export const AdminOverviewView: React.FC<AdminOverviewViewProps> = ({
     <ScrollView
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      decelerationRate={0.92}
     >
-      {/* System health card */}
+      {/* System health card - Clean Light Branded */}
       <View style={styles.healthCard}>
         <View style={styles.healthHeader}>
           <View style={styles.healthStatusRow}>
             <View style={styles.statusDot} />
             <Text style={styles.statusText}>
-              SYSTEM {s.systemStatus}
+              BACKEND {s.systemStatus}
             </Text>
           </View>
-          <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-            <MaterialIcons name="refresh" size={22} color="#38BDF8" />
+          <TouchableOpacity
+            onPress={handleRefresh}
+            style={styles.refreshButton}
+            accessibilityLabel="Refresh status"
+            disabled={isRefreshing}
+          >
+            <MaterialIcons
+              name="refresh"
+              size={24}
+              color="#0284C7"
+              style={isRefreshing ? { opacity: 0.5 } : undefined}
+            />
           </TouchableOpacity>
         </View>
 
         <Text style={styles.healthTitle}>
-          Production Platform Telemetry
+          Central Platform Governance
         </Text>
         <Text style={styles.healthMeta}>
           Node.js Engine {s.nodeVersion} • Database: {s.databaseType}
@@ -74,60 +99,77 @@ export const AdminOverviewView: React.FC<AdminOverviewViewProps> = ({
       </View>
 
       <Text style={styles.sectionTitle}>
-        Platform Statistics (Real Backend)
+        Platform Community & Content Statistics
       </Text>
 
-      {/* Row 1 */}
+      {/* Hero Stat: Total Users */}
+      <View style={{ marginBottom: 12 }}>
+        <StatCard
+          title="Total Users"
+          count={`${s.totalUsers ?? (s.totalParents + s.totalChildren)}`}
+          sub={`${s.totalParents} parents • ${s.totalChildren} child explorers registered`}
+          color="#059669"
+          borderColor="#A7F3D0"
+          icon="groups"
+        />
+      </View>
+
+      {/* Row 1: Parents & Children (Clickable to manage users) */}
       <View style={styles.row}>
         <StatCard
           title="Total Parents"
           count={`${s.totalParents}`}
-          sub={`${s.activeParents} active / ${s.disabledParents} disabled`}
+          sub={`${s.activeParents} active • ${s.disabledParents} disabled`}
           color="#0284C7"
-          color={Colors.kidsSkyBlue}
+          borderColor="#BAE6FD"
+          icon="manage-accounts"
+          onPress={() => onNavigateSection?.(AdminSection.PARENTS)}
         />
         <StatCard
           title="Total Children"
           count={`${s.totalChildren}`}
-          sub={`${s.activeChildren} active / ${s.disabledChildren} disabled`}
-          color="#059669"
-          color={Colors.kidsCoral}
+          sub={`${s.activeChildren} active • ${s.disabledChildren} disabled`}
+          color="#E52E2E"
+          borderColor="#FECACA"
+          icon="people"
+          onPress={() => onNavigateSection?.(AdminSection.CHILDREN)}
         />
       </View>
 
-      {/* Row 2 */}
+      {/* Row 2: Videos & Channels */}
       <View style={styles.row}>
         <StatCard
           title="Approved Videos"
           count={`${s.totalVideos}`}
           sub="Filtered YouTube whitelist"
           color="#D97706"
-          color={Colors.kidsSunnyYellow}
+          borderColor="#FDE68A"
+          icon="video-library"
+          onPress={() => onNavigateSection?.(AdminSection.CONTENT, 'video')}
         />
         <StatCard
           title="Approved Channels"
           count={`${s.totalChannels}`}
-          sub="Curated content hubs"
+          sub="Curated safe creator hubs"
           color="#7C3AED"
-          color={Colors.kidsSkyBlue}
+          borderColor="#DDD6FE"
+          icon="subscriptions"
+          onPress={() => onNavigateSection?.(AdminSection.CONTENT, 'channel')}
         />
       </View>
 
-      {/* Security audit card */}
+      {/* Security audit card - Clean Light Branded */}
       <View style={styles.auditCard}>
         <View style={styles.auditHeader}>
-          <MaterialIcons name="security" size={20} color="#059669" />
-          <MaterialIcons name="security" size={22} color={Colors.kidsSkyBlue} />
+          <MaterialIcons name="verified-user" size={24} color="#059669" />
           <Text style={styles.auditTitle}>
-            Zero-Trust Security Verification
+            Zero-Trust Child Protection Verification
           </Text>
         </View>
         <Text style={styles.auditBody}>
-          • Role-Based Access: CHILD, PARENT, ADMIN enforced at HTTP
-          middleware.{'\n'}
-          • Passwords & PINs securely hashed; no plaintext stored.{'\n'}
-          • Rate-limiting active: 3 failed attempts triggers automatic 60s
-          cooldown.
+          • Role-Based Access: CHILD, PARENT, ADMIN enforced at HTTP middleware level.{'\n'}
+          • Passwords & PINs securely hashed; no unauthorized plaintext leaks.{'\n'}
+          • Instant account controls: Activate, Deactivate, or Block users with immediate session invalidation.
         </Text>
       </View>
     </ScrollView>
@@ -140,13 +182,38 @@ interface StatCardProps {
   count: string;
   sub: string;
   color: string;
+  borderColor?: string;
+  icon: any;
+  onPress?: () => void;
 }
-const StatCard: React.FC<StatCardProps> = ({ title, count, sub, color }) => (
-  <View style={styles.statCard}>
-    <Text style={styles.statTitle}>{title}</Text>
+const StatCard: React.FC<StatCardProps> = ({
+  title,
+  count,
+  sub,
+  color,
+  borderColor = '#E2E8F0',
+  icon,
+  onPress,
+}) => (
+  <TouchableOpacity
+    style={[styles.statCard, { borderColor }]}
+    activeOpacity={0.85}
+    onPress={onPress}
+  >
+    <View style={styles.statTopRow}>
+      <Text style={styles.statTitle} numberOfLines={2}>
+        {title}
+      </Text>
+      <View style={[styles.statIconBadge, { backgroundColor: `${color}18` }]}>
+        <MaterialIcons name={icon} size={20} color={color} />
+      </View>
+    </View>
     <Text style={[styles.statCount, { color }]}>{count}</Text>
     <Text style={styles.statSub}>{sub}</Text>
-  </View>
+    <View style={styles.statTapHint}>
+      <Text style={[styles.statTapHintText, { color }]}>Manage &gt;</Text>
+    </View>
+  </TouchableOpacity>
 );
 
 const styles = StyleSheet.create({
@@ -155,54 +222,71 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   healthCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     padding: 20,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 5,
+    borderLeftColor: '#0284C7',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
   },
   healthHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 10,
   },
   healthStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#10B981',
-    marginRight: 8,
+    marginRight: 6,
   },
   statusText: {
-    color: '#10B981',
-    fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.5,
   },
   refreshButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F0F9FF',
   },
   healthTitle: {
-    color: '#FFFFFF',
+    fontSize: 22,
     fontWeight: '900',
-    fontSize: 20,
-    marginTop: 12,
+    color: '#000000',
+    marginBottom: 4,
   },
   healthMeta: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000000',
   },
   sectionTitle: {
-    ...Typography.titleMedium,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000000',
+    marginBottom: 14,
+    marginTop: 6,
   },
   row: {
     flexDirection: 'row',
@@ -212,68 +296,85 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    borderWidth: 1.5,
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  statTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    gap: 6,
   },
   statTitle: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-    fontSize: 13,
-    color: '#475569',
-    fontWeight: '700',
+    flex: 1,
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#000000',
+    lineHeight: 18,
+  },
+  statIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statCount: {
-    fontSize: 28,
+    fontSize: 34,
     fontWeight: '900',
-    marginTop: 4,
+    marginVertical: 4,
   },
   statSub: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#000000',
+    lineHeight: 18,
+  },
+  statTapHint: {
+    marginTop: 8,
+    alignItems: 'flex-end',
+  },
+  statTapHintText: {
     fontSize: 11,
-    color: '#94A3B8',
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '600',
-    marginTop: 4,
+    fontWeight: '800',
   },
   auditCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderRadius: 14,
-    padding: 16,
-    marginTop: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 5,
+    borderLeftColor: '#059669',
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   auditHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
   },
   auditTitle: {
-    fontWeight: '700',
-    fontSize: 15,
-    fontWeight: '800',
     fontSize: 16,
+    fontWeight: '900',
     color: '#0F172A',
-    marginLeft: 8,
   },
   auditBody: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 18,
-    marginTop: 8,
     fontSize: 14,
     fontWeight: '600',
-    color: '#334155',
+    color: '#475569',
     lineHeight: 22,
-    marginTop: 10,
   },
 });

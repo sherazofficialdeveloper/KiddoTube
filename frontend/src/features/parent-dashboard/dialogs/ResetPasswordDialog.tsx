@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
+import { FontText as Text, FontTextInput as TextInput } from '../../../components/ui/FontText';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
-  TextInput,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Typography } from '../../../theme/typography';
@@ -28,11 +27,11 @@ export const ResetPasswordDialog: React.FC<ResetPasswordDialogProps> = ({
   onDismiss,
   onConfirm,
 }) => {
-  const [newPassword, setNewPassword] = useState('1234');
+  const [newPassword, setNewPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const handleClose = () => {
-    setNewPassword('1234');
+    setNewPassword('');
     setIsPasswordVisible(false);
     onDismiss();
   };
@@ -124,19 +123,13 @@ const styles = StyleSheet.create({
   body: {
     ...Typography.bodyMedium,
     color: '#475569',
-    marginBottom: 4,
     fontWeight: '600',
     marginBottom: 6,
   },
   input: {
-    borderWidth: 1,
     minHeight: 52,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 13,
@@ -154,7 +147,6 @@ const styles = StyleSheet.create({
   },
   passwordInput: {
     marginTop: 0,
-    paddingRight: 44,
     paddingRight: 50,
   },
   eyeButton: {
@@ -162,7 +154,6 @@ const styles = StyleSheet.create({
     right: 8,
     top: 0,
     bottom: 0,
-    width: 40,
     width: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -170,24 +161,16 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: 16,
     marginTop: 18,
   },
-  cancelButton: { paddingHorizontal: 12, paddingVertical: 8 },
-  cancelText: { color: '#475569', fontWeight: '700' },
   cancelButton: { paddingHorizontal: 14, paddingVertical: 10 },
   cancelText: { color: '#475569', fontWeight: '800', fontSize: 14 },
   confirmButton: {
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
     backgroundColor: '#3A9BE8',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
     marginLeft: 8,
   },
-  confirmText: { color: '#FFFFFF', fontWeight: '700' },
   confirmText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
 });

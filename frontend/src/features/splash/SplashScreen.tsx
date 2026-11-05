@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -31,7 +30,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 /**
  * SplashScreen
- * KiddoTube Branding - Concept 3 Flying Sun App Icon & Tagline "Safe screens. Big smiles."
+ * KiddoTube branding - Concept 3 Flying Sun App Icon.
  */
 
 type SplashScreenProps = NativeStackScreenProps<
@@ -82,9 +81,6 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ navigation }) => {
       const backendConnected =
         await useContentStore.getState().initializeAppData();
 
-      setInitStatusText('Checking profile authorization...');
-      await sleep(400);
-
       const session = useContentStore.getState().session;
       const childToken = useContentStore.getState().childToken;
       if (session.isAuthenticated && childToken && session.profile) {
@@ -97,11 +93,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ navigation }) => {
       }
 
       setInitStatusText(
-        backendConnected ? 'Ready to explore! 🚀' : 'Safe mode active! 🎈'
+        backendConnected ? 'Ready to explore! 🚀' : 'Safe offline mode active! 🎈'
       );
-      await sleep(350);
 
-      // Replace splash with the correct screen (no back to splash)
+      // Replace splash with the correct screen immediately
       if (session.isAuthenticated) {
         navigation.replace(ScreenState.HOME);
       } else {
@@ -136,7 +131,6 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ navigation }) => {
 
         <View style={styles.statusPill}>
           <ActivityIndicator size="small" color={Colors.kidsPrimary} />
-          <Text style={styles.statusText}>{initStatusText}</Text>
         </View>
       </Animated.View>
     </LinearGradient>

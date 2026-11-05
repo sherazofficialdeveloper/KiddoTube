@@ -1,5 +1,11 @@
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
+## KiddoTube app details
+
+- The app bundles the client-approved **Nunito** body font and **Fredoka** display font in `assets/fonts/`; both are licensed under the included SIL Open Font License files.
+- Parent appearance settings switch the app between dark and light mode at the configured device-local times (default: 20:00 and 07:00).
+- Child video feeds use virtualized lists with longer fling momentum to keep scrolling responsive with larger libraries.
+
 # Getting Started
 
 > **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.

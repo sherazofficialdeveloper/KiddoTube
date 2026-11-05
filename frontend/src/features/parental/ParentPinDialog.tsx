@@ -1,9 +1,9 @@
 // src/features/parental/ParentPinDialog.tsx
+import { ChildFontText as Text } from '../../components/ui/ChildFontText';
 
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -14,6 +14,7 @@ import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Dimensions } from '../../theme/dimensions';
 import type { PinVerificationResult } from '../../store/screenTimeStore';
+import { KiddoTubeLogo } from '../../components/branding';
 
 /**
  * ParentPinDialog
@@ -104,6 +105,9 @@ export const ParentPinDialog: React.FC<ParentPinDialogProps> = ({
     >
       <View style={styles.backdrop}>
         <View style={styles.dialog} testID="parent_pin_dialog">
+          <View style={styles.logoWrap}>
+            <KiddoTubeLogo size="small" showTagline={false} />
+          </View>
           {/* Top row: lock + title + close */}
           <View style={styles.topRow}>
             <View style={styles.titleRow}>
@@ -246,6 +250,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  logoWrap: {
+    alignItems: 'center',
+    marginBottom: Dimensions.spaceMedium,
   },
   titleRow: {
     flexDirection: 'row',

@@ -1,9 +1,9 @@
 // src/features/parental/ParentExtensionDialog.tsx
+import { ChildFontText as Text } from '../../components/ui/ChildFontText';
 
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,

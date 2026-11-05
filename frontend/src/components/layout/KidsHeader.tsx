@@ -1,13 +1,13 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Dimensions } from '../../theme/dimensions';
 import { KiddoTubeLogo } from '../branding';
+import { useKidsTheme } from '../../theme/ThemeProvider';
 
 /**
  * KidsHeader
@@ -29,6 +29,9 @@ export const KidsHeader: React.FC<KidsHeaderProps> = ({
   onPolicyPress,
   onSettingsPress,
 }) => {
+  const { isDark } = useKidsTheme();
+  const iconColor = isDark ? '#FFFFFF' : '#212121';
+
   return (
     <View style={styles.container}>
       {/* Left: KiddoTube Logo */}
@@ -49,7 +52,7 @@ export const KidsHeader: React.FC<KidsHeaderProps> = ({
           <MaterialIcons
             name="cast"
             size={23}
-            color="#212121"
+            color={iconColor}
           />
         </TouchableOpacity>
 
@@ -64,7 +67,7 @@ export const KidsHeader: React.FC<KidsHeaderProps> = ({
           <MaterialIcons
             name="shield"
             size={22}
-            color="#212121"
+            color={iconColor}
           />
         </TouchableOpacity>
 
@@ -79,7 +82,7 @@ export const KidsHeader: React.FC<KidsHeaderProps> = ({
           <MaterialIcons
             name="settings"
             size={23}
-            color="#212121"
+            color={iconColor}
           />
         </TouchableOpacity>
       </View>

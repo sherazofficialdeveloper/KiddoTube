@@ -22,6 +22,9 @@ import { ChildProfileScreen } from '../../features/profile/ChildProfileScreen';
 import { ParentPanelScreen } from '../../features/parent-dashboard/ParentPanelScreen';
 import { AdminPanelScreen } from '../../features/admin-dashboard/AdminPanelScreen';
 import { TimeOutScreen } from '../../features/timeout/TimeOutScreen';
+import { ParentAuthScreen } from '../../features/parental/ParentAuthScreen';
+import { DownloadsManagerScreen } from '../../features/downloads/DownloadsManagerScreen';
+import { AlmostTimeDialog } from '../../features/timeout/AlmostTimeDialog';
 
 /**
  * RootNavigator
@@ -32,10 +35,12 @@ import { TimeOutScreen } from '../../features/timeout/TimeOutScreen';
  * - Passes `onProtectedSettingsClick` to screens that need it
  */
 
+import { AuthMode } from '../../types/navigation';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 interface RootNavigatorProps {
-  onProtectedSettingsClick: () => void;
+  onProtectedSettingsClick: (mode?: AuthMode) => void;
   onTimeoutProtectedSettingsClick: () => void;
 }
 
@@ -44,6 +49,12 @@ export const RootNavigator: React.FC<RootNavigatorProps> = ({
   onTimeoutProtectedSettingsClick,
 }) => {
   const isLocked = useScreenTimeStore((s) => s.isLocked);
+  const pendingWarningMinutes = useScreenTimeStore(
+    (s) => s.pendingWarningMinutes
+  );
+  const dismissAlmostTimeWarning = useScreenTimeStore(
+    (s) => s.dismissAlmostTimeWarning
+  );
 
   // Lock override — render lock screen instead of navigator
   if (isLocked) {
@@ -57,7 +68,8 @@ export const RootNavigator: React.FC<RootNavigatorProps> = ({
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <View style={styles.rootContainer}>
+      <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         initialRouteName={ScreenState.SPLASH}
         screenOptions={{
@@ -105,7 +117,11 @@ export const RootNavigator: React.FC<RootNavigatorProps> = ({
         <Stack.Screen
           name={ScreenState.PLAYER}
           component={VideoPlayerScreen}
-          options={{ orientation: 'landscape' }}
+          options={{
+            orientation: 'landscape',
+            navigationBarHidden: true,
+            statusBarHidden: true,
+          }}
         />
 
         <Stack.Screen
@@ -121,12 +137,30 @@ export const RootNavigator: React.FC<RootNavigatorProps> = ({
           name={ScreenState.ADMIN_PANEL}
           component={AdminPanelScreen}
         />
+        <Stack.Screen
+          name={ScreenState.PARENT_AUTH}
+          component={ParentAuthScreen}
+        />
+
+        <Stack.Screen
+          name={ScreenState.DOWNLOADS_MANAGER}
+          component={DownloadsManagerScreen}
+        />
       </Stack.Navigator>
-    </NavigationContainer>
+      </NavigationContainer>
+      <AlmostTimeDialog
+        visible={pendingWarningMinutes !== null}
+        minutesRemaining={pendingWarningMinutes ?? 0}
+        onDismiss={dismissAlmostTimeWarning}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  rootContainer: {
+    flex: 1,
+  },
   lockContainer: {
     flex: 1,
   },

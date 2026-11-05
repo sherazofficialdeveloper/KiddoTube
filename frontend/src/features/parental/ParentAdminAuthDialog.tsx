@@ -1,13 +1,12 @@
 // src/features/parental/ParentAdminAuthDialog.tsx
+import { FontText as Text, FontTextInput as TextInput } from '../../components/ui/FontText';
 
 import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
@@ -17,6 +16,7 @@ import { Typography } from '../../theme/typography';
 import { AuthMode } from '../../types/navigation';
 import { useParentAdminStore } from '../../store/parentAdminStore';
 import { useScreenTimeStore } from '../../store/screenTimeStore';
+import { KiddoTubeLogo } from '../../components/branding';
 
 /**
  * ParentAdminAuthDialog
@@ -32,6 +32,7 @@ import { useScreenTimeStore } from '../../store/screenTimeStore';
 interface ParentAdminAuthDialogProps {
   visible: boolean;
   showPinLogin: boolean;
+  initialMode?: AuthMode;
   onDismiss: () => void;
   onOpenParentPanel: (verifiedPin?: string) => void;
   onOpenAdminPanel: () => void;
@@ -40,12 +41,13 @@ interface ParentAdminAuthDialogProps {
 export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
   visible,
   showPinLogin,
+  initialMode,
   onDismiss,
   onOpenParentPanel,
   onOpenAdminPanel,
 }) => {
   const [selectedMode, setSelectedMode] = useState<AuthMode>(
-    showPinLogin ? AuthMode.PARENT_PIN : AuthMode.PARENT_LOGIN
+    initialMode ?? (showPinLogin ? AuthMode.PARENT_PIN : AuthMode.PARENT_LOGIN)
   );
   const [pinValue, setPinValue] = useState('');
   const [username, setUsername] = useState('');
@@ -66,11 +68,11 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
   useEffect(() => {
     if (visible) {
       setSelectedMode(
-        showPinLogin ? AuthMode.PARENT_PIN : AuthMode.PARENT_LOGIN
+        initialMode ?? (showPinLogin ? AuthMode.PARENT_PIN : AuthMode.PARENT_LOGIN)
       );
       setRegisterStep(1);
     }
-  }, [showPinLogin, visible]);
+  }, [showPinLogin, visible, initialMode]);
 
   const resetForm = () => {
     setPinValue('');
@@ -179,7 +181,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
 
     const result = await useParentAdminStore
       .getState()
-      .loginParent(username, password);
       .loginParent(username.trim(), password.trim());
 
     setIsLoading(false);
@@ -209,7 +210,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
 
     const result = await useParentAdminStore
       .getState()
-      .registerParent(username, email, password);
       .registerParent(username.trim(), email.trim(), password.trim());
 
     setIsLoading(false);
@@ -296,6 +296,11 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                   color={Colors.kidsTextPrimary}
                 />
               </TouchableOpacity>
+            </View>
+
+            {/* KiddoTube Brand Logo */}
+            <View style={styles.dialogLogoWrap}>
+              <KiddoTubeLogo size="small" showTagline={true} />
             </View>
 
             {!showPinLogin && (
@@ -396,45 +401,19 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                   Sign in to manage kids profiles, whitelist channels, and set limits.
                 </Text>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Parent Username or Email"
-                  placeholderTextColor={Colors.kidsTextMuted}
-                  value={username}
-                  onChangeText={(t) => {
-                    setUsername(t);
-                    setErrorMessage(null);
-                  }}
-                  autoCapitalize="none"
-                />
-
-                <View style={styles.passwordWrap}>
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Parent Username or Email *</Text>
                   <TextInput
-                    style={[styles.input, styles.passwordInput]}
-                    placeholder="Parent Password"
                     style={styles.input}
                     placeholder="Enter your username or email"
                     placeholderTextColor={Colors.kidsTextMuted}
-                    value={password}
                     value={username}
                     onChangeText={(t) => {
-                      setPassword(t);
                       setUsername(t);
                       setErrorMessage(null);
                     }}
-                    secureTextEntry={!isPasswordVisible}
                     autoCapitalize="none"
                   />
-                  <TouchableOpacity
-                    style={styles.eyeButton}
-                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                  >
-                    <MaterialIcons
-                      name={isPasswordVisible ? 'visibility-off' : 'visibility'}
-                      size={20}
-                      color={Colors.kidsTextMuted}
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -452,7 +431,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                       secureTextEntry={!isPasswordVisible}
                       autoCapitalize="none"
                     />
-                  </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.eyeButton}
                       onPress={() => setIsPasswordVisible(!isPasswordVisible)}
@@ -469,7 +447,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
 
                 <PrimaryButton
                   label="Open Parent Dashboard"
-                  color={Colors.kidsPrimary}
                   color={Colors.kidsCoral}
                   loading={isLoading}
                   onPress={handleParentLogin}
@@ -477,14 +454,9 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
               </View>
             )}
 
-            {/* --- Parent Register --- */}
             {/* --- Parent Register (2-Step Process) --- */}
             {selectedMode === AuthMode.PARENT_REGISTER && (
               <View style={styles.formSection}>
-                <Text style={styles.formTitle}>Create Real Parent Account</Text>
-                <Text style={styles.formSubtitle}>
-                  You can set a parental PIN later from the Parent Dashboard.
-                </Text>
                 {/* Step indicator */}
                 <View style={styles.stepIndicatorRow}>
                   <View style={[styles.stepBadge, styles.stepBadgeActive]}>
@@ -515,17 +487,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                   </View>
                 </View>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Username"
-                  placeholderTextColor={Colors.kidsTextMuted}
-                  value={username}
-                  onChangeText={(t) => {
-                    setUsername(t);
-                    setErrorMessage(null);
-                  }}
-                  autoCapitalize="none"
-                />
                 {registerStep === 1 ? (
                   // --- Step 1: Safety & Privacy Policy Acceptance ---
                   <View>
@@ -534,18 +495,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                       Welcome to KiddoTube! We are dedicated to providing a safe, joyful, and ad-free streaming environment for children. Please review our safety commitments before creating your account:
                     </Text>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email Address"
-                  placeholderTextColor={Colors.kidsTextMuted}
-                  value={email}
-                  onChangeText={(t) => {
-                    setEmail(t);
-                    setErrorMessage(null);
-                  }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
                     <View style={styles.policyBriefCard}>
                       <View style={styles.policyPoint}>
                         <MaterialIcons
@@ -563,28 +512,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                         </View>
                       </View>
 
-                <View style={styles.passwordWrap}>
-                  <TextInput
-                    style={[styles.input, styles.passwordInput]}
-                    placeholder="Password"
-                    placeholderTextColor={Colors.kidsTextMuted}
-                    value={password}
-                    onChangeText={(t) => {
-                      setPassword(t);
-                      setErrorMessage(null);
-                    }}
-                    secureTextEntry={!isPasswordVisible}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeButton}
-                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                    accessibilityLabel="Toggle password visibility"
-                  >
-                    <MaterialIcons
-                      name={isPasswordVisible ? 'visibility-off' : 'visibility'}
-                      size={20}
-                      color={Colors.kidsTextMuted}
                       <View style={styles.policyPoint}>
                         <MaterialIcons
                           name="block"
@@ -680,8 +607,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                         setRegisterStep(2);
                       }}
                     />
-                  </TouchableOpacity>
-                </View>
                   </View>
                 ) : (
                   // --- Step 2: Account Details Inputs ---
@@ -691,12 +616,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                       Step 2: Enter your parent credentials. You will use these to sign in and manage child profiles.
                     </Text>
 
-                <PrimaryButton
-                  label="Register & Enter Dashboard"
-                  color={Colors.kidsPrimary}
-                  loading={isLoading}
-                  onPress={handleParentRegister}
-                />
                     <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>Parent Username *</Text>
                       <TextInput
@@ -832,45 +751,19 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                   Admin credentials required. Grants system-wide oversight.
                 </Text>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Admin Username / Email"
-                  placeholderTextColor={Colors.kidsTextMuted}
-                  value={adminUser}
-                  onChangeText={(t) => {
-                    setAdminUser(t);
-                    setErrorMessage(null);
-                  }}
-                  autoCapitalize="none"
-                />
-
-                <View style={styles.passwordWrap}>
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Admin Username / Email *</Text>
                   <TextInput
-                    style={[styles.input, styles.passwordInput]}
-                    placeholder="Admin Password"
                     style={styles.input}
                     placeholder="Enter admin username"
                     placeholderTextColor={Colors.kidsTextMuted}
-                    value={adminPass}
                     value={adminUser}
                     onChangeText={(t) => {
-                      setAdminPass(t);
                       setAdminUser(t);
                       setErrorMessage(null);
                     }}
-                    secureTextEntry={!isPasswordVisible}
                     autoCapitalize="none"
                   />
-                  <TouchableOpacity
-                    style={styles.eyeButton}
-                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                  >
-                    <MaterialIcons
-                      name={isPasswordVisible ? 'visibility-off' : 'visibility'}
-                      size={20}
-                      color={Colors.kidsTextMuted}
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -888,7 +781,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                       secureTextEntry={!isPasswordVisible}
                       autoCapitalize="none"
                     />
-                  </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.eyeButton}
                       onPress={() => setIsPasswordVisible(!isPasswordVisible)}
@@ -904,7 +796,6 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
 
                 <PrimaryButton
                   label="Sign In to Admin Panel 🛡️"
-                  color="#0F172A"
                   color={Colors.kiddoDarkNavy}
                   loading={isLoading}
                   onPress={handleAdminLogin}
@@ -1028,138 +919,131 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dialogLogoWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 14,
+  },
   tabsContainer: {
     flexDirection: 'row',
     backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 4,
-    marginTop: 16,
-    gap: 4,
+    borderRadius: 14,
+    padding: 6,
+    marginTop: 10,
+    gap: 6,
   },
   tabPill: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabPillSelected: {
     backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   tabPillText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   tabPillTextSelected: {
     color: '#0F172A',
   },
   tabPillTextUnselected: {
     color: '#64748B',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   formSection: {
-    marginTop: 20,
     marginTop: 18,
   },
   formTitle: {
-    ...Typography.titleMedium,
-    ...Typography.titleLarge,
+    fontSize: 22,
+    fontWeight: '900',
     color: Colors.kidsTextPrimary,
-    fontWeight: '700',
-    fontWeight: '800',
     textAlign: 'center',
   },
   formSubtitle: {
-    ...Typography.bodySmall,
-    color: '#64748B',
-    ...Typography.bodyMedium,
+    fontSize: 15,
     color: Colors.kidsTextSecondary,
     textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 8,
     fontWeight: '600',
     marginTop: 6,
-    marginBottom: 12,
-    lineHeight: 20,
+    marginBottom: 14,
+    lineHeight: 22,
   },
   inputGroup: {
-    marginTop: 12,
+    marginTop: 14,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: Colors.kidsTextPrimary,
     marginBottom: 6,
   },
   input: {
     width: '100%',
-    minHeight: 52,
+    minHeight: 56,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    fontSize: 16,
-    fontWeight: '600',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.kidsTextPrimary,
-    marginTop: 10,
+    marginTop: 6,
   },
   passwordWrap: {
     width: '100%',
     position: 'relative',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 6,
   },
   passwordInput: {
     marginTop: 0,
-    paddingRight: 44,
-    paddingRight: 50,
+    paddingRight: 52,
   },
   eyeButton: {
     position: 'absolute',
     right: 8,
     top: 0,
     bottom: 0,
-    width: 40,
     width: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButton: {
-    height: 50,
-    borderRadius: 12,
-    minHeight: 52,
-    borderRadius: 14,
+    minHeight: 56,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
-    paddingHorizontal: 16,
+    marginTop: 22,
+    paddingHorizontal: 18,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
   },
   // Step indicator styles
   stepIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    gap: 8,
+    marginBottom: 18,
+    gap: 10,
   },
   stepBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1171,15 +1055,15 @@ const styles = StyleSheet.create({
   },
   stepBadgeText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
   },
   stepBadgeTextInactive: {
     color: '#64748B',
   },
   stepLine: {
-    width: 40,
-    height: 3,
+    width: 48,
+    height: 4,
     backgroundColor: '#E2E8F0',
     borderRadius: 2,
   },
@@ -1189,44 +1073,44 @@ const styles = StyleSheet.create({
   // Policy brief styles
   policyBriefCard: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    padding: 16,
-    marginTop: 6,
-    marginBottom: 14,
-    gap: 14,
+    padding: 18,
+    marginTop: 8,
+    marginBottom: 16,
+    gap: 16,
   },
   policyPoint: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 14,
   },
   policyPointTextWrap: {
     flex: 1,
   },
   policyPointTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: Colors.kidsTextPrimary,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   policyPointDesc: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.kidsTextSecondary,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   policyConsentBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1.5,
+    borderRadius: 16,
+    borderWidth: 2,
     borderColor: '#CBD5E1',
-    padding: 14,
-    gap: 12,
-    marginTop: 4,
+    padding: 16,
+    gap: 14,
+    marginTop: 6,
   },
   policyConsentBoxActive: {
     borderColor: Colors.kidsSkyBlue,
@@ -1268,7 +1152,6 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.kidsError,
     fontSize: 13,
-    fontWeight: '700',
     fontWeight: '800',
     textAlign: 'center',
     marginTop: 14,
@@ -1290,8 +1173,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   pinDotFilled: {
-    backgroundColor: Colors.kidsPrimary + '1F',
-    borderColor: Colors.kidsPrimary,
     backgroundColor: Colors.kidsCoral + '1F',
     borderColor: Colors.kidsCoral,
   },
@@ -1301,7 +1182,6 @@ const styles = StyleSheet.create({
   },
   pinDotBullet: {
     fontSize: 24,
-    color: Colors.kidsPrimary,
     color: Colors.kidsCoral,
     fontWeight: '900',
   },
@@ -1322,7 +1202,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   keypadButtonOk: {
-    backgroundColor: Colors.kidsPrimary,
     backgroundColor: Colors.kidsSkyBlue,
   },
   keypadButtonClear: {
@@ -1330,7 +1209,6 @@ const styles = StyleSheet.create({
   },
   keypadButtonText: {
     fontSize: 20,
-    fontWeight: '700',
     fontWeight: '800',
     color: '#1E293B',
   },

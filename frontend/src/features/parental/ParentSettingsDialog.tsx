@@ -1,13 +1,12 @@
 // src/features/parental/ParentSettingsDialog.tsx
+import { FontText as Text, FontTextInput as TextInput } from '../../components/ui/FontText';
 
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
-  TextInput,
   ScrollView,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -149,8 +148,6 @@ export const ParentSettingsDialog: React.FC<ParentSettingsDialogProps> = ({
             <View style={[styles.sectionHeader, { marginTop: 20 }]}>
               <MaterialIcons
                 name="add"
-                size={20}
-                color={Colors.kidsMintGreen}
                 size={22}
                 color={Colors.kidsSkyBlue}
               />
@@ -286,13 +283,8 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 52,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 13,
@@ -303,7 +295,6 @@ const styles = StyleSheet.create({
   },
   successText: {
     ...Typography.labelMedium,
-    color: Colors.kidsMintGreen,
     color: Colors.kidsSkyBlue,
     fontWeight: '700',
     marginTop: 8,

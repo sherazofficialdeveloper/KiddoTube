@@ -1,11 +1,10 @@
 // src/features/search/SearchScreen.tsx
+import { ChildFontText as Text, ChildFontTextInput as TextInput } from '../../components/ui/ChildFontText';
 
 import React, { useMemo, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
@@ -19,6 +18,7 @@ import { KidsVideoCard } from '../../components/ui/KidsVideoCard';
 import { KidsChannelCard } from '../../components/ui/KidsChannelCard';
 import { KidsPlaylistCard } from '../../components/ui/KidsPlaylistCard';
 import { KidsEmptyState } from '../../components/ui/KidsStatusViews';
+import { UnderwaterSeabedIllustration } from '../../components/ui/UnderwaterSeabedIllustration';
 import { KidsBottomNavigation } from '../../components/layout/KidsBottomNavigation';
 
 import { useContentStore } from '../../store/contentStore';
@@ -123,32 +123,27 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ route }) => {
 
   return (
     <View style={styles.root} testID="kids_search_screen">
-      {/* Top bar */}
-      <SafeAreaView style={styles.safeTop}>
+      {/* Top bar with Back Arrow and Underline Input (Image 4) */}
+      <SafeAreaView style={styles.safeTop} edges={['top', 'left', 'right']}>
         <View style={styles.topBar}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleBack}
             testID="search_back_button"
+            accessibilityLabel="Back"
           >
             <MaterialIcons
               name="arrow-back"
-              size={26}
-              color={Colors.kidsTextPrimary}
+              size={28}
+              color="#0F172A"
             />
           </TouchableOpacity>
 
-          <View style={styles.searchInputWrap}>
-            <MaterialIcons
-              name="search"
-              size={22}
-              color={Colors.kidsSkyBlue}
-              style={styles.searchIcon}
-            />
+          <View style={styles.searchInputUnderlineWrap}>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search approved videos, channels, playlists..."
-              placeholderTextColor={Colors.kidsTextMuted}
+              placeholder="Search YouTube Kids"
+              placeholderTextColor="#007791"
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
@@ -158,12 +153,13 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ route }) => {
             {query.length > 0 && (
               <TouchableOpacity
                 onPress={() => setQuery('')}
-                style={styles.clearButton}
+                style={styles.actionBtn}
+                accessibilityLabel="Clear Search"
               >
                 <MaterialIcons
                   name="clear"
-                  size={20}
-                  color={Colors.kidsTextMuted}
+                  size={22}
+                  color="#005F73"
                 />
               </TouchableOpacity>
             )}
@@ -171,29 +167,28 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ route }) => {
         </View>
       </SafeAreaView>
 
-      {/* Safe search banner */}
-      <View style={styles.safeBanner}>
-        <Text style={styles.safeBannerText}>
-          🔒 Safe Search: Searching only videos approved by your parent
-        </Text>
-      </View>
-
-      {/* Results */}
+      {/* Results / Empty seabed area */}
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isQueryEmpty && styles.scrollContentEmpty,
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        decelerationRate={0.92}
       >
         {isQueryEmpty ? (
-          <KidsEmptyState
-            title="Find Fun Videos!"
-            subtitle="Search for science, music, bedtime stories, or animal adventures."
-          />
+          /* Empty state: Clean underwater seabed at bottom (Image 4) */
+          <View style={styles.seabedContainer}>
+            <UnderwaterSeabedIllustration />
+          </View>
         ) : !hasAnyResults ? (
-          <KidsEmptyState
-            title="No Results Found"
-            subtitle={`We couldn't find "${query}" in your approved list. Try another search!`}
-          />
+          <View style={styles.emptyCardWrap}>
+            <KidsEmptyState
+              title="No Results Found"
+              subtitle={`We couldn't find "${query}" in your approved list. Try another search!`}
+            />
+          </View>
         ) : (
           <>
             {/* Channels */}
@@ -285,68 +280,77 @@ export const SearchScreen: React.FC<SearchScreenProps> = ({ route }) => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Colors.kidsBackground,
+    backgroundColor: '#00BAF2',
   },
   safeTop: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#00BAF2',
   },
   topBar: {
-    height: Dimensions.headerHeight,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#00BAF2',
+    gap: 8,
   },
   backButton: {
-    width: Dimensions.touchTargetMin,
-    height: Dimensions.touchTargetMin,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchInputWrap: {
+  searchInputUnderlineWrap: {
     flex: 1,
-    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.kidsSurfaceVariant,
-    borderRadius: Dimensions.radiusPill,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  searchIcon: {
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#007791',
+    paddingBottom: 4,
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
-    color: Colors.kidsTextPrimary,
-    paddingVertical: 0,
-  },
-  clearButton: {
-    padding: 4,
-  },
-  safeBanner: {
-    backgroundColor: Colors.kidsSkyBlue + '1F',
-    paddingHorizontal: Dimensions.spaceMedium,
-    paddingVertical: 6,
-  },
-  safeBannerText: {
-    ...Typography.labelSmall,
-    color: '#0284C7',
+    fontSize: 18,
     fontWeight: '700',
+    color: '#000000',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  actionBtn: {
+    padding: 4,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 84,
+    paddingBottom: 24,
+    flexGrow: 1,
+  },
+  scrollContentEmpty: {
+    padding: 0,
+    justifyContent: 'flex-end',
+  },
+  seabedContainer: {
+    width: '100%',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  emptyCardWrap: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    marginTop: 20,
+    elevation: 3,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
   },
   section: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   sectionTitle: {
-    ...Typography.titleMedium,
-    color: Colors.kidsTextPrimary,
-    fontWeight: '700',
+    fontSize: 18,
+    color: '#000000',
+    fontWeight: '900',
     marginBottom: 8,
   },
   horizontalScroll: {

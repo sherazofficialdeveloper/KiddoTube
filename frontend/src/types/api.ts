@@ -48,6 +48,10 @@ export interface ChildLoginResponse {
 export interface VideoItemDto {
   id: string;
   parentId?: string | null;
+  parentName?: string;
+  allowedChildNames?: string[];
+  sourceType?: 'DIRECT' | 'CHANNEL' | 'PLAYLIST';
+  sourceName?: string;
   youtubeId: string;
   title: string;
   channelTitle: string;
@@ -57,11 +61,17 @@ export interface VideoItemDto {
   description: string;
   status: string;
   isBlocked: boolean;
+  createdAt?: string;
+  publishedAt?: string;
+  childIds?: string[];
 }
 
 export interface ChannelItemDto {
   id: string;
   parentId?: string | null;
+  parentName?: string;
+  allowedChildNames?: string[];
+  createdAt?: string;
   channelId?: string | null;
   title: string;
   avatarUrl: string;
@@ -70,11 +80,15 @@ export interface ChannelItemDto {
   description: string;
   status: string;
   isBlocked: boolean;
+  childIds?: string[];
 }
 
 export interface PlaylistItemDto {
   id: string;
   parentId?: string | null;
+  parentName?: string;
+  allowedChildNames?: string[];
+  createdAt?: string;
   playlistId?: string | null;
   title: string;
   channelTitle: string;
@@ -83,6 +97,7 @@ export interface PlaylistItemDto {
   videoIds: string[];
   status: string;
   isBlocked: boolean;
+  childIds?: string[];
 }
 
 export interface ApprovedContentResponse {
@@ -271,6 +286,7 @@ export interface AddChannelRequest {
   description?: string | null;
   colorAccentHex?: number | null;
   category?: string | null;
+  childIds?: string[];
 }
 
 export interface AddPlaylistRequest {
@@ -279,6 +295,7 @@ export interface AddPlaylistRequest {
   channelTitle?: string | null;
   thumbnailUrl?: string | null;
   category?: string | null;
+  childIds?: string[];
 }
 
 export interface AddVideoRequest {
@@ -289,11 +306,18 @@ export interface AddVideoRequest {
   durationText?: string | null;
   thumbnailUrl?: string | null;
   description?: string | null;
+  childIds?: string[];
 }
 
 export interface GenericActionResponse {
   success: boolean;
   message?: string | null;
+  error?: string | null;
+}
+
+export interface ChildPasswordResponse {
+  success: boolean;
+  data?: { password: string } | null;
   error?: string | null;
 }
 
@@ -321,6 +345,7 @@ export interface AdminAuthResponse {
 }
 
 export interface AdminStatsDto {
+  totalUsers?: number;
   totalParents: number;
   activeParents: number;
   disabledParents: number;
@@ -351,6 +376,7 @@ export interface AdminParentItemDto {
   status: string;
   childrenCount: number;
   createdAt?: string | null;
+  publishedAt?: string | null;
 }
 
 export interface AdminParentsResponse {

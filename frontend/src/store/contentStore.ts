@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { Api } from '../services/api';
+import { downloadManager } from '../services/download/downloadManager';
 import type {
   VideoItem,
   ChannelItem,
@@ -28,17 +29,34 @@ interface ContentState {
   approvedVideos: VideoItem[];
   approvedChannels: ChannelItem[];
   approvedPlaylists: PlaylistItem[];
+  allRawVideos: VideoItem[];
+  allRawChannels: ChannelItem[];
   childProfiles: ChildProfile[];
   selectedProfile: ChildProfile | null;
   session: ChildSession;
   isBackendConnected: boolean;
   likedVideoIds: string[];
+  blockedVideoIds: string[];
+  blockedChannelTitles: string[];
+  subscribedChannelTitles: string[];
+  watchedVideoIds: string[];
+  downloadedVideos: VideoItem[];
+  downloadProgress: Record<string, number>;
+  activeDownloadingIds: string[];
+  activeDownloadingVideos: VideoItem[];
 
   // Auth token (private, not exposed in state shape publicly)
   childToken: string | null;
 
   // Actions
   initializeAppData: () => Promise<boolean>;
+  recordVideoWatched: (videoId: string) => Promise<void>;
+  downloadVideo: (video: VideoItem) => Promise<boolean>;
+  startVideoDownload: (video: VideoItem) => Promise<boolean>;
+  removeDownloadedVideo: (videoId: string) => Promise<void>;
+  isDownloaded: (videoId: string) => boolean;
+  isDownloading: (videoId: string) => boolean;
+  getDownloadProgress: (videoId: string) => number;
   loginChild: (
     username: string,
     passwordOrPin: string,
@@ -47,6 +65,7 @@ interface ContentState {
   logoutChild: () => void;
   selectProfile: (profile: ChildProfile) => void;
   fetchApprovedContent: (token?: string) => Promise<void>;
+  refreshOnlineContent: () => Promise<boolean>;
   getVideosForCategory: (category: VideoCategory) => VideoItem[];
   getVideosForChannel: (channelTitle: string) => VideoItem[];
   getVideosForPlaylist: (playlist: PlaylistItem) => VideoItem[];
@@ -56,6 +75,12 @@ interface ContentState {
   searchApprovedContent: (query: string) => SearchResultBundle;
   addApprovedVideo: (video: VideoItem) => void;
   blockOrRemoveVideo: (id: string) => void;
+  blockVideo: (id: string) => Promise<void>;
+  unblockVideo: (id: string) => Promise<void>;
+  blockChannel: (channelTitle: string) => Promise<void>;
+  unblockChannel: (channelTitle: string) => Promise<void>;
+  toggleSubscribeChannel: (channelTitle: string) => Promise<boolean>;
+  isChannelSubscribed: (channelTitle: string) => boolean;
   getCurrentToken: () => string | null;
   toggleLikeVideo: (videoId: string) => Promise<void>;
   updateCurrentChildAvatar: (
@@ -74,122 +99,290 @@ export const useContentStore = create<ContentState>((set, get) => ({
   approvedVideos: [],
   approvedChannels: [],
   approvedPlaylists: [],
+  allRawVideos: [],
+  allRawChannels: [],
   childProfiles: [],
   selectedProfile: null,
   session: initialSession,
   isBackendConnected: false,
   childToken: null,
   likedVideoIds: [],
+  blockedVideoIds: [],
+  blockedChannelTitles: [],
+  subscribedChannelTitles: [],
+  watchedVideoIds: [],
+  downloadedVideos: [],
+  downloadProgress: {},
+  activeDownloadingIds: [],
+  activeDownloadingVideos: [],
+
+  isDownloaded: (videoId: string): boolean => {
+    return downloadManager.isDownloaded(videoId);
+  },
+
+  isDownloading: (videoId: string): boolean => {
+    return downloadManager.isDownloading(videoId) || get().activeDownloadingIds.includes(videoId);
+  },
+
+  getDownloadProgress: (videoId: string): number => {
+    return downloadManager.getDownloadProgress(videoId) || get().downloadProgress[videoId] || 0;
+  },
+
+  startVideoDownload: async (video: VideoItem): Promise<boolean> => {
+    if (!video || !video.id) return false;
+    // Direct delegation to DownloadManager (asynchronous background download)
+    return await downloadManager.startDownload(video);
+  },
+
+  downloadVideo: async (video: VideoItem): Promise<boolean> => {
+    return get().startVideoDownload(video);
+  },
+
+  removeDownloadedVideo: async (videoId: string): Promise<void> => {
+    await downloadManager.deleteDownload(videoId);
+    const current = get().downloadedVideos;
+    const updated = current.filter((v) => v.id !== videoId);
+    set({ downloadedVideos: updated });
+    try {
+      await AsyncStorage.setItem('@kids_downloaded_videos', JSON.stringify(updated));
+    } catch (e: any) {
+      console.warn('[ContentStore] Remove downloaded video failed:', e.message);
+    }
+  },
 
   /**
    * Initializes app during Splash:
-   * 1. Health check
-   * 2. Fetch child profiles
-   * 3. Fetch approved content
+   * 1. Health check with timeout
+   * 2. Fetch child profiles or restore offline cache
+   * 3. Fetch approved content or restore offline cache
    */
   initializeAppData: async (): Promise<boolean> => {
     let connected = false;
 
-    // Load persisted liked video IDs
+    const withTimeout = <T>(promise: Promise<T>, ms = 1200): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error('Network timeout')), ms)
+        ),
+      ]);
+
+    // Load persisted preferences, history, downloads & offline caches
     try {
-      const rawLiked = await AsyncStorage.getItem('@kids_liked_video_ids');
-      if (rawLiked) {
-        const ids = JSON.parse(rawLiked);
-        if (Array.isArray(ids)) {
-          set({ likedVideoIds: ids });
+      const [
+        rawLiked,
+        rawBlockedVids,
+        rawBlockedChannels,
+        rawSubscribed,
+        rawWatchHistory,
+        rawDownloads,
+        rawCachedProfiles,
+        rawCachedVideos,
+        rawCachedChannels,
+        rawCachedPlaylists,
+        rawCachedSession,
+      ] = await Promise.all([
+        AsyncStorage.getItem('@kids_liked_video_ids'),
+        AsyncStorage.getItem('@kids_blocked_videos'),
+        AsyncStorage.getItem('@kids_blocked_channels'),
+        AsyncStorage.getItem('@kids_subscribed_channels'),
+        AsyncStorage.getItem('@kids_watch_history_ids'),
+        AsyncStorage.getItem('@kids_downloaded_videos'),
+        AsyncStorage.getItem('@kids_cached_child_profiles'),
+        AsyncStorage.getItem('@kids_cached_approved_videos'),
+        AsyncStorage.getItem('@kids_cached_approved_channels'),
+        AsyncStorage.getItem('@kids_cached_approved_playlists'),
+        AsyncStorage.getItem('@kids_cached_child_session'),
+      ]);
+
+      if (rawLiked) set({ likedVideoIds: JSON.parse(rawLiked) });
+      if (rawBlockedVids) set({ blockedVideoIds: JSON.parse(rawBlockedVids) });
+      if (rawBlockedChannels) set({ blockedChannelTitles: JSON.parse(rawBlockedChannels) });
+      if (rawSubscribed) set({ subscribedChannelTitles: JSON.parse(rawSubscribed) });
+      if (rawWatchHistory) set({ watchedVideoIds: JSON.parse(rawWatchHistory) });
+      if (rawDownloads) {
+        try {
+          const parsed = JSON.parse(rawDownloads);
+          if (Array.isArray(parsed)) {
+            const valid = parsed.filter((v: any) => downloadManager.isDownloaded(v.id));
+            set({ downloadedVideos: valid });
+          }
+        } catch {}
+      }
+
+      // Synchronize with DownloadManager
+      downloadManager.subscribe((records) => {
+        const completed = Object.values(records)
+          .filter((r) => r.status === 'COMPLETED' && Boolean(r.localUri) && r.video)
+          .map((r) => ({
+            ...r.video!,
+            localUri: r.localUri || r.video!.localUri,
+          }));
+
+        const active = Object.values(records)
+          .filter((r) => r.status === 'DOWNLOADING')
+          .map((r) => r.video!);
+
+        const progressMap: Record<string, number> = {};
+        Object.values(records).forEach((r) => {
+          progressMap[r.id] = r.progressPercent;
+        });
+
+        set({
+          downloadedVideos: completed,
+          activeDownloadingIds: active.map((a) => a.id),
+          activeDownloadingVideos: active,
+          downloadProgress: progressMap,
+        });
+
+        AsyncStorage.setItem('@kids_downloaded_videos', JSON.stringify(completed)).catch(() => {});
+      });
+
+      // Pre-seed profiles & session so offline view is instant!
+      if (rawCachedProfiles) {
+        const cachedProfiles = JSON.parse(rawCachedProfiles);
+        if (Array.isArray(cachedProfiles) && cachedProfiles.length > 0) {
+          set({ childProfiles: cachedProfiles, selectedProfile: cachedProfiles[0] });
+        }
+      }
+      if (rawCachedSession) {
+        const cs = JSON.parse(rawCachedSession);
+        if (cs && cs.isAuthenticated) {
+          set({ session: cs, selectedProfile: cs.profile ?? get().selectedProfile });
         }
       }
     } catch (e: any) {
-      console.warn('[ContentStore] Failed to load liked videos:', e.message);
+      console.warn('[ContentStore] Local cache load warning:', e.message);
     }
 
-    // 1. Health check
+    // 1. Health check with timeout
     try {
-      const health = await Api.getHealth();
+      const health = await withTimeout(Api.getHealth(), 1200);
       if (health.status === 'ok') {
         connected = true;
         set({ isBackendConnected: true });
         console.log('[ContentStore] Backend health OK:', health.service);
       }
     } catch (e: any) {
-      console.warn('[ContentStore] Health check failed:', e.message);
+      console.warn('[ContentStore] Health check failed or offline:', e.message);
+      set({
+        isBackendConnected: false,
+        approvedVideos: [],
+        approvedChannels: [],
+        approvedPlaylists: [],
+      });
     }
 
     const savedToken = await secureStorage.getChildToken();
     if (savedToken) {
       set({ childToken: savedToken });
-      try {
-        const auth = await Api.getCurrentUser();
-        const details = auth.user?.details;
-        if (
-          auth.authenticated &&
-          auth.user?.role === 'CHILD' &&
-          auth.user.childId &&
-          details &&
-          typeof details.avatarEmoji === 'string' &&
-          typeof details.colorHex === 'number'
-        ) {
-          const profile: ChildProfile = {
-            id: auth.user.childId,
-            name:
-              typeof details.displayName === 'string'
-                ? details.displayName
-                : auth.user.username,
-            avatarEmoji: details.avatarEmoji,
-            colorHex: details.colorHex,
-            dailyLimitMinutes: 60,
-            minutesWatchedToday: 0,
-          };
-          set({
-            selectedProfile: profile,
-            session: {
+      if (connected) {
+        try {
+          const auth = await withTimeout(Api.getCurrentUser(), 1200);
+          const details = auth.user?.details;
+          if (
+            auth.authenticated &&
+            auth.user?.role === 'CHILD' &&
+            auth.user.childId &&
+            details &&
+            typeof details.avatarEmoji === 'string' &&
+            typeof details.colorHex === 'number'
+          ) {
+            const profile: ChildProfile = {
+              id: auth.user.childId,
+              name:
+                typeof details.displayName === 'string'
+                  ? details.displayName
+                  : auth.user.username,
+              avatarEmoji: details.avatarEmoji,
+              colorHex: details.colorHex,
+              dailyLimitMinutes: 60,
+              minutesWatchedToday: 0,
+            };
+            const currentSession = {
               isAuthenticated: true,
               username: profile.name,
               profile,
-            },
-          });
-        } else {
-          set({ childToken: null });
-          await secureStorage.clearChildToken();
+            };
+            set({
+              selectedProfile: profile,
+              session: currentSession,
+            });
+            AsyncStorage.setItem('@kids_cached_child_session', JSON.stringify(currentSession)).catch(() => {});
+          } else {
+            set({ childToken: null });
+            await secureStorage.clearChildToken();
+            await AsyncStorage.removeItem('@kids_cached_child_session');
+          }
+        } catch {
+          // Network error or timeout: DO NOT clear token! Preserve offline session!
+          console.warn('[ContentStore] Online session verify timed out/offline; using cached session.');
+        }
+      }
+
+      // If offline or online check timed out, ensure authenticated session is active
+      if (!get().session.isAuthenticated) {
+        const fallbackProfile: ChildProfile = get().selectedProfile || get().childProfiles[0] || {
+          id: 'offline_child',
+          name: 'Child Explorer',
+          username: 'Child Explorer',
+          avatarEmoji: '🚀',
+          colorHex: 0xff00a6fb,
+          dailyLimitMinutes: 60,
+          minutesWatchedToday: 0,
+        };
+        const offlineSession = {
+          isAuthenticated: true,
+          username: fallbackProfile.name,
+          profile: fallbackProfile,
+        };
+        set({
+          session: offlineSession,
+          selectedProfile: fallbackProfile,
+        });
+        AsyncStorage.setItem('@kids_cached_child_session', JSON.stringify(offlineSession)).catch(() => {});
+      }
+    }
+
+    // 2. Fetch child profiles (if online)
+    if (connected) {
+      try {
+        const profileResponse = await withTimeout(Api.getChildProfiles(), 1200);
+        if (profileResponse.success && profileResponse.profiles.length > 0) {
+          const mapped: ChildProfile[] = profileResponse.profiles.map((dto: any) => ({
+            id: dto.id,
+            name: dto.name,
+            username: dto.username || dto.name,
+            avatarEmoji: dto.avatarEmoji,
+            colorHex: dto.colorHex,
+            ageGroup: dto.ageGroup,
+            dailyLimitMinutes: dto.dailyLimitMinutes,
+            minutesWatchedToday: 0,
+            parentId: dto.parentId,
+          }));
+          set((state) => ({
+            childProfiles: mapped,
+            selectedProfile: state.selectedProfile ?? mapped[0] ?? null,
+          }));
+          AsyncStorage.setItem('@kids_cached_child_profiles', JSON.stringify(mapped)).catch(() => {});
         }
       } catch (e: any) {
-        console.warn('[ContentStore] Saved child session restore failed:', e.message);
-        set({ childToken: null });
-        await secureStorage.clearChildToken();
+        console.warn('[ContentStore] Profile load failed:', e.message);
       }
-    }
 
-    // 2. Fetch child profiles
-    try {
-      const profileResponse = await Api.getChildProfiles();
-      if (profileResponse.success && profileResponse.profiles.length > 0) {
-        const mapped: ChildProfile[] = profileResponse.profiles.map((dto: any) => ({
-          id: dto.id,
-          name: dto.name,
-          username: dto.username || dto.name,
-          avatarEmoji: dto.avatarEmoji,
-          colorHex: dto.colorHex,
-          dailyLimitMinutes: dto.dailyLimitMinutes,
-          minutesWatchedToday: 0,
-          parentId: dto.parentId,
-        }));
-        set((state) => ({
-          childProfiles: mapped,
-          selectedProfile: state.selectedProfile ?? mapped[0] ?? null,
-        }));
+      // 3. Fetch approved content (if online)
+      try {
+        const contentResponse = await withTimeout(Api.getApprovedContent(), 1500);
+        if (contentResponse.success) {
+          applyContentResponse(contentResponse, set, get().likedVideoIds);
+          const st = get();
+          AsyncStorage.setItem('@kids_cached_approved_videos', JSON.stringify(st.approvedVideos)).catch(() => {});
+          AsyncStorage.setItem('@kids_cached_approved_channels', JSON.stringify(st.approvedChannels)).catch(() => {});
+          AsyncStorage.setItem('@kids_cached_approved_playlists', JSON.stringify(st.approvedPlaylists)).catch(() => {});
+        }
+      } catch (e: any) {
+        console.warn('[ContentStore] Content load failed:', e.message);
       }
-    } catch (e: any) {
-      console.warn('[ContentStore] Profile load failed:', e.message);
-    }
-
-    // 3. Fetch approved content
-    try {
-      const contentResponse = await Api.getApprovedContent();
-      if (contentResponse.success) {
-        applyContentResponse(contentResponse, set, get().likedVideoIds);
-      }
-    } catch (e: any) {
-      console.warn('[ContentStore] Content load failed:', e.message);
     }
 
     return connected;
@@ -231,20 +424,31 @@ export const useContentStore = create<ContentState>((set, get) => ({
           username: childData.username || childData.displayName || childData.name,
           avatarEmoji: childData.avatarEmoji || '🚀',
           colorHex: childData.colorHex || 0xff00a6fb,
+          ageGroup: childData.ageGroup,
           dailyLimitMinutes: childData.dailyLimitMinutes || 60,
           minutesWatchedToday: 0,
           parentId: childData.parentId,
         };
 
+        const currentSession = {
+          isAuthenticated: true,
+          username: profile.name,
+          profile,
+        };
+
         set({
           childToken: response.token ?? null,
           selectedProfile: profile,
-          session: {
-            isAuthenticated: true,
-            username: profile.name,
-            profile,
-          },
+          session: currentSession,
         });
+
+        AsyncStorage.setItem('@kids_cached_child_session', JSON.stringify(currentSession)).catch(() => {});
+        const currentProfiles = get().childProfiles;
+        const updatedProfiles = currentProfiles.some((p) => p.id === profile.id)
+          ? currentProfiles.map((p) => (p.id === profile.id ? profile : p))
+          : [profile, ...currentProfiles];
+        set({ childProfiles: updatedProfiles });
+        AsyncStorage.setItem('@kids_cached_child_profiles', JSON.stringify(updatedProfiles)).catch(() => {});
 
         // Persist token securely and clear parent state
         if (response.token) {
@@ -287,6 +491,7 @@ export const useContentStore = create<ContentState>((set, get) => ({
    */
   logoutChild: () => {
     secureStorage.clearChildToken();
+    AsyncStorage.removeItem('@kids_cached_child_session').catch(() => {});
     set({
       childToken: null,
       session: initialSession,
@@ -353,6 +558,40 @@ export const useContentStore = create<ContentState>((set, get) => ({
       }
     } catch (e: any) {
       console.warn('[ContentStore] Fetch home content failed:', e.message);
+    }
+  },
+
+  refreshOnlineContent: async (): Promise<boolean> => {
+    try {
+      const health = await Api.getHealth();
+      if (health.status !== 'ok') {
+        set({ isBackendConnected: false });
+        return false;
+      }
+
+      set({ isBackendConnected: true });
+      await get().fetchApprovedContent();
+
+      const state = get();
+      await Promise.all([
+        AsyncStorage.setItem(
+          '@kids_cached_approved_videos',
+          JSON.stringify(state.approvedVideos)
+        ),
+        AsyncStorage.setItem(
+          '@kids_cached_approved_channels',
+          JSON.stringify(state.approvedChannels)
+        ),
+        AsyncStorage.setItem(
+          '@kids_cached_approved_playlists',
+          JSON.stringify(state.approvedPlaylists)
+        ),
+      ]);
+      return true;
+    } catch (e: any) {
+      set({ isBackendConnected: false });
+      console.warn('[ContentStore] Online content refresh failed:', e.message);
+      return false;
     }
   },
 
@@ -460,6 +699,131 @@ export const useContentStore = create<ContentState>((set, get) => ({
     }));
   },
 
+  blockVideo: async (id: string) => {
+    const { blockedVideoIds, approvedVideos, allRawVideos } = get();
+    const updated = Array.from(new Set([...blockedVideoIds, id]));
+    const target = approvedVideos.find((v) => v.id === id);
+    const updatedRaw = target && !allRawVideos.some((v) => v.id === target.id)
+      ? [...allRawVideos, target]
+      : allRawVideos;
+    set({
+      blockedVideoIds: updated,
+      allRawVideos: updatedRaw,
+      approvedVideos: approvedVideos.filter((v) => v.id !== id),
+    });
+    try {
+      await AsyncStorage.setItem('@kids_blocked_videos', JSON.stringify(updated));
+    } catch (e: any) {
+      console.warn('[ContentStore] Failed to save blocked videos:', e.message);
+    }
+  },
+
+  unblockVideo: async (id: string) => {
+    const { blockedVideoIds, allRawVideos, blockedChannelTitles } = get();
+    const updated = blockedVideoIds.filter((bid) => bid !== id);
+    set({ blockedVideoIds: updated });
+    try {
+      await AsyncStorage.setItem('@kids_blocked_videos', JSON.stringify(updated));
+    } catch (e: any) {
+      console.warn('[ContentStore] Failed to save blocked videos:', e.message);
+    }
+    const lowerBlockedChannels = blockedChannelTitles.map((t) => t.toLowerCase());
+    const restored = allRawVideos.filter(
+      (v) => !updated.includes(v.id) && !lowerBlockedChannels.includes((v.channelTitle || '').toLowerCase())
+    );
+    if (restored.length > 0) {
+      set({ approvedVideos: restored });
+    }
+  },
+
+  blockChannel: async (channelTitle: string) => {
+    const { blockedChannelTitles, approvedVideos, approvedChannels, allRawChannels } = get();
+    const cleanTitle = channelTitle.trim().toLowerCase();
+    const updated = Array.from(new Set([...blockedChannelTitles, channelTitle]));
+    const targetCh = approvedChannels.find((c) => (c.title || '').trim().toLowerCase() === cleanTitle);
+    const updatedRawCh = targetCh && !allRawChannels.some((c) => (c.title || '').trim().toLowerCase() === cleanTitle)
+      ? [...allRawChannels, targetCh]
+      : allRawChannels;
+    set({
+      blockedChannelTitles: updated,
+      allRawChannels: updatedRawCh,
+      approvedVideos: approvedVideos.filter(
+        (v) => (v.channelTitle || '').trim().toLowerCase() !== cleanTitle
+      ),
+      approvedChannels: approvedChannels.filter(
+        (c) => (c.title || '').trim().toLowerCase() !== cleanTitle
+      ),
+    });
+    try {
+      await AsyncStorage.setItem('@kids_blocked_channels', JSON.stringify(updated));
+    } catch (e: any) {
+      console.warn('[ContentStore] Failed to save blocked channels:', e.message);
+    }
+  },
+
+  unblockChannel: async (channelTitle: string) => {
+    const { blockedChannelTitles, allRawVideos, allRawChannels, blockedVideoIds } = get();
+    const cleanTitle = channelTitle.trim().toLowerCase();
+    const updated = blockedChannelTitles.filter((t) => t.trim().toLowerCase() !== cleanTitle);
+    set({ blockedChannelTitles: updated });
+    try {
+      await AsyncStorage.setItem('@kids_blocked_channels', JSON.stringify(updated));
+    } catch (e: any) {
+      console.warn('[ContentStore] Failed to save blocked channels:', e.message);
+    }
+    const lowerBlocked = updated.map((t) => t.toLowerCase());
+    const restoredVideos = allRawVideos.filter(
+      (v) => !blockedVideoIds.includes(v.id) && !lowerBlocked.includes((v.channelTitle || '').toLowerCase())
+    );
+    const restoredChannels = allRawChannels.filter(
+      (c) => !lowerBlocked.includes((c.title || '').toLowerCase())
+    );
+    if (restoredVideos.length > 0 || restoredChannels.length > 0) {
+      set({ approvedVideos: restoredVideos, approvedChannels: restoredChannels });
+    }
+  },
+
+  toggleSubscribeChannel: async (channelTitle: string): Promise<boolean> => {
+    const { subscribedChannelTitles } = get();
+    const clean = channelTitle.trim();
+    const exists = subscribedChannelTitles.some(
+      (t) => t.toLowerCase() === clean.toLowerCase()
+    );
+    const updated = exists
+      ? subscribedChannelTitles.filter((t) => t.toLowerCase() !== clean.toLowerCase())
+      : [...subscribedChannelTitles, clean];
+
+    set({ subscribedChannelTitles: updated });
+    try {
+      await AsyncStorage.setItem('@kids_subscribed_channels', JSON.stringify(updated));
+    } catch (e: any) {
+      console.warn('[ContentStore] Failed to save subscriptions:', e.message);
+    }
+
+    if (!exists) {
+      const match = get().approvedChannels.find(
+        (c: ChannelItem) => c.title.toLowerCase() === clean.toLowerCase()
+      );
+      if (match?.id) {
+        Api.syncChannel(match.id)
+          .then((res) => {
+            if (res.addedCount > 0) {
+              get().fetchApprovedContent();
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
+    return !exists;
+  },
+
+  isChannelSubscribed: (channelTitle: string): boolean => {
+    const { subscribedChannelTitles } = get();
+    const clean = channelTitle.trim().toLowerCase();
+    return subscribedChannelTitles.some((t) => t.toLowerCase() === clean);
+  },
+
   getCurrentToken: () => get().childToken,
 
   toggleLikeVideo: async (videoId: string) => {
@@ -494,6 +858,18 @@ export const useContentStore = create<ContentState>((set, get) => ({
       console.warn('[ContentStore] Save liked video failed:', err.message);
     }
   },
+
+  recordVideoWatched: async (videoId: string) => {
+    if (!videoId) return;
+    const current = get().watchedVideoIds;
+    const updated = [videoId, ...current.filter((id) => id !== videoId)].slice(0, 50);
+    set({ watchedVideoIds: updated });
+    try {
+      await AsyncStorage.setItem('@kids_watch_history_ids', JSON.stringify(updated));
+    } catch (e: any) {
+      console.warn('[ContentStore] Save watch history failed:', e.message);
+    }
+  },
 }));
 
 /**
@@ -505,12 +881,41 @@ function applyContentResponse(
   set: (partial: any) => void,
   likedIds: string[] = []
 ): void {
+  const { blockedVideoIds, blockedChannelTitles, selectedProfile } = useContentStore.getState();
+  const currentChildId = selectedProfile?.id;
+  const isAudienceAllowed = (item: any) => {
+    if (!currentChildId) return true;
+    if (!item.childIds || !Array.isArray(item.childIds) || item.childIds.length === 0) return true;
+    return item.childIds.map(String).includes(String(currentChildId));
+  };
+  const lowerBlockedChannels = blockedChannelTitles.map((t) => t.toLowerCase());
+
+  const videos = (response.videos ?? [])
+    .map((v: any) => mapVideoDto(v, likedIds))
+    .filter(
+      (v: VideoItem) =>
+        isAudienceAllowed(v) &&
+        !blockedVideoIds.includes(v.id) &&
+        !lowerBlockedChannels.includes((v.channelTitle || '').toLowerCase())
+    );
+
+  const channels = (response.channels ?? [])
+    .map(mapChannelDto)
+    .filter(
+      (c: ChannelItem) =>
+        isAudienceAllowed(c) &&
+        !lowerBlockedChannels.includes((c.title || '').toLowerCase())
+    );
+
+  const allVids = (response.videos ?? []).map((v: any) => mapVideoDto(v, likedIds));
+  const allChs = (response.channels ?? []).map(mapChannelDto);
+
   set({
-    approvedVideos: (response.videos ?? []).map((v: any) =>
-      mapVideoDto(v, likedIds)
-    ),
-    approvedChannels: (response.channels ?? []).map(mapChannelDto),
-    approvedPlaylists: (response.playlists ?? []).map(mapPlaylistDto),
+    allRawVideos: allVids,
+    allRawChannels: allChs,
+    approvedVideos: videos,
+    approvedChannels: channels,
+    approvedPlaylists: (response.playlists ?? []).map(mapPlaylistDto).filter(isAudienceAllowed),
   });
 }
 
@@ -525,6 +930,8 @@ function mapVideoDto(dto: any, likedIds: string[] = []): VideoItem {
     durationText: dto.durationText,
     category: parseCategory(dto.category),
     description: dto.description ?? '',
+    childIds: (dto.childIds ?? []).map(String),
+    createdAt: dto.createdAt,
     isBlocked: dto.isBlocked ?? false,
     isFavorite: isFav,
     likesCount: isFav ? 1 : 0,
@@ -539,6 +946,7 @@ function mapChannelDto(dto: any): ChannelItem {
     videoCount: dto.videoCount,
     colorAccentHex: dto.colorAccentHex ?? 0xff00a6fb,
     description: dto.description ?? '',
+    childIds: (dto.childIds ?? []).map(String),
     isBlocked: dto.isBlocked ?? false,
   };
 }
@@ -551,6 +959,7 @@ function mapPlaylistDto(dto: any): PlaylistItem {
     thumbnailUrl: dto.thumbnailUrl,
     videoCount: dto.videoCount,
     videoIds: dto.videoIds ?? [],
+    childIds: (dto.childIds ?? []).map(String),
     isBlocked: dto.isBlocked ?? false,
   };
 }

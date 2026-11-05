@@ -5,12 +5,13 @@ import { StatusBar, StyleSheet, View } from 'react-native';
 import { AppProviders } from './src/app/providers/AppProviders';
 import { RootNavigator } from './src/app/navigation/RootNavigator';
 import { useScreenTimeStore } from './src/store/screenTimeStore';
+import { useKidsTheme } from './src/theme/ThemeProvider';
 import { ParentAdminAuthDialog } from './src/features/parental/ParentAdminAuthDialog';
 import { ParentsPasscodeModal } from './src/features/parental/ParentsPasscodeModal';
 import { ParentExtensionDialog } from './src/features/parental/ParentExtensionDialog';
 import { AlmostTimeDialog } from './src/features/timeout/AlmostTimeDialog';
 import { Toast } from './src/components/ui/Toast';
-import { ScreenState } from './src/types/navigation';
+import { AuthMode, ScreenState } from './src/types/navigation';
 import {
   navigate,
   resetToParentPanel,
@@ -41,6 +42,7 @@ const App: React.FC = () => {
 
   // Dialog states
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [authDialogMode, setAuthDialogMode] = useState<AuthMode>(AuthMode.PARENT_LOGIN);
   const [showTimeoutPasscodeModal, setShowTimeoutPasscodeModal] = useState(false);
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [verifiedPinForExtension, setVerifiedPinForExtension] = useState('');
@@ -55,7 +57,12 @@ const App: React.FC = () => {
     remainingMinutes <= 5 &&
     !isAlmostTimeWarningShown;
 
-  const handleParentSettingsClick = () => {
+  const handleParentSettingsClick = (mode?: AuthMode) => {
+    if (mode) {
+      setAuthDialogMode(mode);
+    } else {
+      setAuthDialogMode(AuthMode.PARENT_LOGIN);
+    }
     setShowAuthDialog(true);
   };
 
@@ -101,11 +108,8 @@ const App: React.FC = () => {
   };
 
   return (
-    <AppProviders isNightMode={isLocked}>
-      <StatusBar
-        barStyle={isLocked ? 'light-content' : 'dark-content'}
-      />
-
+    <AppProviders isNightMode={isLocked ? true : undefined}>
+      <ThemedStatusBar />
       <View style={styles.root}>
         <RootNavigator
           onProtectedSettingsClick={handleParentSettingsClick}
@@ -125,6 +129,7 @@ const App: React.FC = () => {
         <ParentAdminAuthDialog
           visible={showAuthDialog}
           showPinLogin={false}
+          initialMode={authDialogMode}
           onDismiss={() => setShowAuthDialog(false)}
           onOpenParentPanel={handleOpenParentPanel}
           onOpenAdminPanel={handleOpenAdminPanel}
@@ -153,6 +158,11 @@ const App: React.FC = () => {
       </View>
     </AppProviders>
   );
+};
+
+const ThemedStatusBar: React.FC = () => {
+  const { isDark } = useKidsTheme();
+  return <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />;
 };
 
 const styles = StyleSheet.create({

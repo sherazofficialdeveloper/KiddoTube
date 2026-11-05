@@ -1,16 +1,17 @@
+// src/features/parent-dashboard/ParentProfileView.tsx
 import React, { useEffect, useState } from 'react';
+import { FontText as Text, FontTextInput as TextInput } from '../../components/ui/FontText';
 import {
   Alert,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
+  Linking,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { Colors } from '../../theme/colors';
 import type { ParentAccountDto } from '../../types/api';
+import { getPrivacyPolicyUrl } from '../../app/config/env';
 
 interface ActionResult {
   success: boolean;
@@ -98,108 +99,126 @@ export const ParentProfileView: React.FC<ParentProfileViewProps> = ({
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
+      {/* Profile Details Card */}
       <View style={styles.card}>
         <View style={styles.heading}>
           <MaterialIcons name="account-circle" size={24} color="#0284C7" />
-          <Text style={styles.title}>Profile details</Text>
+          <Text style={styles.title}>Profile Details</Text>
         </View>
         <Text style={styles.help}>
           Update the username and email used for your parent account.
         </Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Username"
-          value={username}
-          onChangeText={setUsername}
-          autoCapitalize="none"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email address"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Username</Text>
+          <TextInput
+            style={styles.input}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Email Address</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+        </View>
+
         <TouchableOpacity
           style={styles.button}
           onPress={saveProfile}
           disabled={isSaving}
         >
-          <Text style={styles.buttonText}>Save profile</Text>
+          <Text style={styles.buttonText}>Save Profile</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Change Password Card */}
       <View style={styles.card}>
         <View style={styles.heading}>
-          <MaterialIcons name="lock" size={22} color="#7C3AED" />
-          <MaterialIcons name="lock" size={22} color={Colors.kidsSkyBlue} />
-          <Text style={styles.title}>Change password</Text>
+          <MaterialIcons name="lock" size={24} color="#0284C7" />
+          <Text style={styles.title}>Change Password</Text>
         </View>
-        <View style={styles.passwordWrap}>
-          <TextInput
-            style={[styles.input, styles.passwordInput]}
-            placeholder="Current password"
-            value={currentPassword}
-            onChangeText={setCurrentPassword}
-            secureTextEntry={!showCurrentPass}
-            autoCapitalize="none"
-          />
-          <TouchableOpacity
-            style={styles.eyeButton}
-            onPress={() => setShowCurrentPass(!showCurrentPass)}
-            accessibilityLabel="Toggle current password visibility"
-          >
-            <MaterialIcons
-              name={showCurrentPass ? 'visibility-off' : 'visibility'}
-              size={20}
-              color="#64748B"
+        <Text style={styles.help}>
+          Keep your parent account secure by updating your secret password.
+        </Text>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Current Password</Text>
+          <View style={styles.passwordWrap}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secureTextEntry={!showCurrentPass}
+              autoCapitalize="none"
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowCurrentPass(!showCurrentPass)}
+              accessibilityLabel="Toggle current password visibility"
+            >
+              <MaterialIcons
+                name={showCurrentPass ? 'visibility-off' : 'visibility'}
+                size={20}
+                color="#64748B"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.passwordWrap}>
-          <TextInput
-            style={[styles.input, styles.passwordInput]}
-            placeholder="New password (at least 6 characters)"
-            value={newPassword}
-            onChangeText={setNewPassword}
-            secureTextEntry={!showNewPass}
-            autoCapitalize="none"
-          />
-          <TouchableOpacity
-            style={styles.eyeButton}
-            onPress={() => setShowNewPass(!showNewPass)}
-            accessibilityLabel="Toggle new password visibility"
-          >
-            <MaterialIcons
-              name={showNewPass ? 'visibility-off' : 'visibility'}
-              size={20}
-              color="#64748B"
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>New Password</Text>
+          <View style={styles.passwordWrap}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry={!showNewPass}
+              autoCapitalize="none"
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowNewPass(!showNewPass)}
+              accessibilityLabel="Toggle new password visibility"
+            >
+              <MaterialIcons
+                name={showNewPass ? 'visibility-off' : 'visibility'}
+                size={20}
+                color="#64748B"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.passwordWrap}>
-          <TextInput
-            style={[styles.input, styles.passwordInput]}
-            placeholder="Confirm new password"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry={!showConfirmPass}
-            autoCapitalize="none"
-          />
-          <TouchableOpacity
-            style={styles.eyeButton}
-            onPress={() => setShowConfirmPass(!showConfirmPass)}
-            accessibilityLabel="Toggle confirm password visibility"
-          >
-            <MaterialIcons
-              name={showConfirmPass ? 'visibility-off' : 'visibility'}
-              size={20}
-              color="#64748B"
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Confirm Password</Text>
+          <View style={styles.passwordWrap}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPass}
+              autoCapitalize="none"
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowConfirmPass(!showConfirmPass)}
+              accessibilityLabel="Toggle confirm password visibility"
+            >
+              <MaterialIcons
+                name={showConfirmPass ? 'visibility-off' : 'visibility'}
+                size={20}
+                color="#64748B"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -207,7 +226,31 @@ export const ParentProfileView: React.FC<ParentProfileViewProps> = ({
           onPress={savePassword}
           disabled={isSaving}
         >
-          <Text style={styles.buttonText}>Update password</Text>
+          <Text style={styles.buttonText}>Update Password</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Safety & Policy Card (Google Play & Family Safety) */}
+      <View style={styles.card}>
+        <View style={styles.heading}>
+          <MaterialIcons name="security" size={24} color="#0284C7" />
+          <Text style={styles.title}>Safety & Privacy Policy</Text>
+        </View>
+        <Text style={styles.help}>
+          KiddoTube is 100% compliant with COPPA, GDPR-K, and Google Play Families guidelines. We enforce zero behavioral tracking, zero commercial ads, strict parent whitelisting, and secure data handling.
+        </Text>
+        <TouchableOpacity
+          style={[styles.button, styles.policyButton]}
+          activeOpacity={0.85}
+          onPress={() => {
+            const url = getPrivacyPolicyUrl();
+            Linking.openURL(url).catch((err) => {
+              console.warn('Could not open privacy policy URL:', err);
+            });
+          }}
+        >
+          <MaterialIcons name="open-in-new" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+          <Text style={styles.buttonText}>View Public Privacy Policy (Web)</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -215,68 +258,88 @@ export const ParentProfileView: React.FC<ParentProfileViewProps> = ({
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 36 },
+  content: { padding: 16, paddingBottom: 40 },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     padding: 20,
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  heading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#000000',
+  },
+  help: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000000',
+    lineHeight: 20,
     marginBottom: 16,
   },
-  heading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { color: '#0F172A', fontSize: 18, fontWeight: '800' },
-  help: { color: '#64748B', fontSize: 13, marginTop: 8 },
-  help: { color: '#475569', fontSize: 14, fontWeight: '600', marginTop: 8 },
+  inputGroup: {
+    marginBottom: 14,
+  },
+  inputLabel: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#000000',
+    marginBottom: 6,
+  },
   input: {
-    borderWidth: 1,
-    minHeight: 52,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 12,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#0F172A',
-    marginTop: 12,
+    fontWeight: '800',
+    color: '#000000',
+    backgroundColor: '#FFFFFF',
   },
   passwordWrap: {
-    width: '100%',
     position: 'relative',
     justifyContent: 'center',
-    marginTop: 12,
   },
   passwordInput: {
-    marginTop: 0,
-    paddingRight: 44,
-    paddingRight: 50,
+    paddingRight: 48,
   },
   eyeButton: {
     position: 'absolute',
-    right: 8,
-    top: 0,
-    bottom: 0,
-    width: 40,
-    width: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    right: 14,
+    padding: 6,
   },
   button: {
     backgroundColor: '#0284C7',
-    borderRadius: 10,
-    height: 46,
-    backgroundColor: Colors.kidsSkyBlue,
     borderRadius: 14,
-    minHeight: 52,
+    paddingVertical: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-    marginTop: 18,
+    marginTop: 8,
   },
-  passwordButton: { backgroundColor: '#7C3AED' },
-  buttonText: { color: '#FFFFFF', fontWeight: '700' },
-  passwordButton: { backgroundColor: Colors.kidsCoral },
-  buttonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  passwordButton: {
+    backgroundColor: '#E5641C',
+  },
+  policyButton: {
+    backgroundColor: '#0284C7',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+  },
 });

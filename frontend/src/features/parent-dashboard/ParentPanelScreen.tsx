@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { FontText as Text } from '../../components/ui/FontText';
 import {
   Alert,
   Modal,
   StyleSheet,
-  Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { Colors } from '../../theme/colors';
+import { KiddoTubeLogo } from '../../components/branding';
 import { Api } from '../../services/api';
 import { useParentAdminStore } from '../../store/parentAdminStore';
 import {
@@ -36,11 +36,12 @@ import { ParentContentView } from './ParentContentView';
 import { ParentScreenTimeView } from './ParentScreenTimeView';
 import { ParentPinManagementView } from './ParentPinManagementView';
 import { AddChildDialog } from './dialogs/AddChildDialog';
-import { AddVideoDialog } from './dialogs/AddVideoDialog';
+import { AddVideoView } from './AddVideoView';
 import { AddChannelDialog } from './dialogs/AddChannelDialog';
 import { AddPlaylistDialog } from './dialogs/AddPlaylistDialog';
 import { ResetPasswordDialog } from './dialogs/ResetPasswordDialog';
 import { ParentProfileView } from './ParentProfileView';
+import { ParentAppearanceView } from './ParentAppearanceView';
 
 interface ApprovedContent {
   videos: VideoItem[];
@@ -66,6 +67,8 @@ const toVideo = (video: VideoItemDto): VideoItem => ({
       (category) => category === video.category.toUpperCase()
     ) ?? VideoCategory.ALL,
   description: video.description,
+  createdAt: video.createdAt,
+  childIds: video.childIds,
   isBlocked: video.isBlocked,
 });
 
@@ -76,6 +79,7 @@ const toChannel = (channel: ChannelItemDto): ChannelItem => ({
   videoCount: channel.videoCount,
   colorAccentHex: channel.colorAccentHex,
   description: channel.description,
+  childIds: channel.childIds,
   isBlocked: channel.isBlocked,
 });
 
@@ -86,6 +90,7 @@ const toPlaylist = (playlist: PlaylistItemDto): PlaylistItem => ({
   thumbnailUrl: playlist.thumbnailUrl,
   videoCount: playlist.videoCount,
   videoIds: playlist.videoIds,
+  childIds: playlist.childIds,
   isBlocked: playlist.isBlocked,
 });
 
@@ -94,7 +99,7 @@ const sections: Array<{
   label: string;
   icon: MaterialIconsIconName;
 }> = [
-  { section: ParentNavSection.DASHBOARD, label: 'Home', icon: 'dashboard' },
+  { section: ParentNavSection.DASHBOARD, label: 'Home', icon: 'home' },
   { section: ParentNavSection.CHILDREN, label: 'Children', icon: 'people' },
   { section: ParentNavSection.CONTENT, label: 'Media', icon: 'video-library' },
   { section: ParentNavSection.SCREEN_TIME, label: 'Time', icon: 'timer' },
@@ -106,14 +111,16 @@ export const ParentPanelScreen: React.FC = () => {
   );
   const [content, setContent] = useState(initialContent);
   const [showAddChild, setShowAddChild] = useState(false);
-  const [showAddVideo, setShowAddVideo] = useState(false);
+  const [isAddingVideo, setIsAddingVideo] = useState(false);
   const [showAddChannel, setShowAddChannel] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
   const [childToReset, setChildToReset] = useState<ChildDetailDto | null>(null);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [childPasswordRevision, setChildPasswordRevision] = useState(0);
 
   const parentDashboard = useParentAdminStore((state) => state.parentDashboard);
   const parentAccount = useParentAdminStore((state) => state.parentAccount);
+  const parentToken = useParentAdminStore((state) => state.parentToken);
   const parentChildren = useParentAdminStore((state) => state.parentChildren);
   const fetchParentDashboard = useParentAdminStore(
     (state) => state.fetchParentDashboard
@@ -124,6 +131,9 @@ export const ParentPanelScreen: React.FC = () => {
   const createChild = useParentAdminStore((state) => state.createChild);
   const updateDailyLimit = useParentAdminStore(
     (state) => state.updateDailyLimit
+  );
+  const updateChildDailyLimit = useParentAdminStore(
+    (state) => state.updateChildDailyLimit
   );
   const updateParentPin = useParentAdminStore(
     (state) => state.updateParentPin
@@ -137,6 +147,9 @@ export const ParentPanelScreen: React.FC = () => {
   const logoutParent = useParentAdminStore((state) => state.logoutParent);
   const resetChildPassword = useParentAdminStore(
     (state) => state.resetChildPassword
+  );
+  const getChildPassword = useParentAdminStore(
+    (state) => state.getChildPassword
   );
   const deleteChild = useParentAdminStore((state) => state.deleteChild);
   const addVideo = useParentAdminStore((state) => state.addVideo);
@@ -174,8 +187,9 @@ export const ParentPanelScreen: React.FC = () => {
   }, [fetchParentChildren, fetchParentDashboard, refreshContent]);
 
   useEffect(() => {
+    if (!parentToken) return;
     refresh();
-  }, [refresh]);
+  }, [parentToken, refresh]);
 
   const showActionError = (title: string, result: { success: boolean; error?: string }) => {
     if (!result.success) {
@@ -229,13 +243,34 @@ export const ParentPanelScreen: React.FC = () => {
     ]);
   };
 
+  // If in Add Video mode, render full page AddVideoView
+  if (isAddingVideo) {
+    return (
+      <SafeAreaView style={styles.root} testID="parent_add_video_screen">
+        <AddVideoView
+          children={parentChildren}
+          onBack={() => setIsAddingVideo(false)}
+          onAddVideo={async (title, channel, youtubeId, category, childIds) => {
+            const result = await addVideo(title, channel, youtubeId, category, childIds);
+            if (result.success) {
+              await refreshContent();
+            }
+            return result;
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root} testID="parent_panel_screen">
+      {/* Light Branded Header */}
       <View style={styles.topBar}>
+        <KiddoTubeLogo size="small" showTagline={false} />
         <View style={styles.titleBlock}>
-          <Text style={styles.title}>KiddoTube Parent Dashboard</Text>
+          <Text style={styles.title}>Parent Dashboard</Text>
           <Text style={styles.subtitle}>
-            {parentDashboard?.parent?.displayName ?? 'Family controls'} • Safe screens. Big smiles.
+            • Hand-picked video
           </Text>
         </View>
       </View>
@@ -252,7 +287,9 @@ export const ParentPanelScreen: React.FC = () => {
         {currentSection === ParentNavSection.CHILDREN && (
           <ParentChildrenView
             children={parentChildren}
+            passwordRevision={childPasswordRevision}
             onAddChildClick={() => setShowAddChild(true)}
+            onGetChildPassword={getChildPassword}
             onResetPasswordClick={setChildToReset}
             onDeleteChildClick={handleDeleteChild}
           />
@@ -260,7 +297,8 @@ export const ParentPanelScreen: React.FC = () => {
         {currentSection === ParentNavSection.CONTENT && (
           <ParentContentView
             {...content}
-            onAddVideoClick={() => setShowAddVideo(true)}
+            children={parentChildren}
+            onAddVideoClick={() => setIsAddingVideo(true)}
             onAddChannelClick={() => setShowAddChannel(true)}
             onAddPlaylistClick={() => setShowAddPlaylist(true)}
             onRemoveVideo={(video) =>
@@ -281,11 +319,28 @@ export const ParentPanelScreen: React.FC = () => {
                 'Unable to remove playlist'
               )
             }
+            onRemoveMultipleVideos={async (videoIds) => {
+              for (const id of videoIds) {
+                await removeVideo(id);
+              }
+              await refreshContent();
+            }}
+            onRemoveMultipleChannels={async (channelIds) => {
+              for (const id of channelIds) {
+                await removeChannel(id);
+              }
+              await refreshContent();
+            }}
+            onRemoveMultiplePlaylists={async (playlistIds) => {
+              for (const id of playlistIds) {
+                await removePlaylist(id);
+              }
+              await refreshContent();
+            }}
           />
         )}
         {currentSection === ParentNavSection.SCREEN_TIME && (
           <ParentScreenTimeView
-            key={dailyLimit}
             currentLimit={dailyLimit}
             children={parentChildren}
             onSaveDailyLimit={async (limit) => {
@@ -294,6 +349,13 @@ export const ParentPanelScreen: React.FC = () => {
                 await updateDailyLimit(limit)
               );
             }}
+            onSaveChildDailyLimit={async (childId, limit) => {
+              showActionError(
+                'Unable to update child limit',
+                await updateChildDailyLimit(childId, limit)
+              );
+            }}
+            onRefresh={refresh}
           />
         )}
         {currentSection === ParentNavSection.PIN && (
@@ -306,6 +368,9 @@ export const ParentPanelScreen: React.FC = () => {
             }}
           />
         )}
+        {currentSection === ParentNavSection.APPEARANCE && (
+          <ParentAppearanceView />
+        )}
         {currentSection === ParentNavSection.ACCOUNT && (
           <ParentProfileView
             account={parentAccount}
@@ -315,6 +380,7 @@ export const ParentPanelScreen: React.FC = () => {
         )}
       </View>
 
+      {/* Light Branded Bottom Navigation */}
       <View style={styles.bottomNav}>
         {sections.map(({ section, label, icon }) => {
           const isSelected = currentSection === section;
@@ -328,8 +394,8 @@ export const ParentPanelScreen: React.FC = () => {
             >
               <MaterialIcons
                 name={icon}
-                size={21}
-                color={isSelected ? '#38BDF8' : '#94A3B8'}
+                size={24}
+                color={isSelected ? '#E52E2E' : '#000000'}
               />
               <Text
                 style={[
@@ -350,11 +416,12 @@ export const ParentPanelScreen: React.FC = () => {
           onPress={() => setIsMenuVisible(true)}
           style={styles.navItem}
         >
-          <MaterialIcons name="menu" size={21} color="#94A3B8" />
+          <MaterialIcons name="menu" size={24} color="#000000" />
           <Text style={[styles.navLabel, styles.navLabelUnselected]}>Menu</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Parent Drawer Menu (Single icons, clean light UI) */}
       <Modal
         visible={isMenuVisible}
         transparent
@@ -365,10 +432,22 @@ export const ParentPanelScreen: React.FC = () => {
           <View style={styles.drawerBackdrop}>
             <TouchableWithoutFeedback>
               <View style={styles.drawer}>
-                <Text style={styles.drawerTitle}>Parent Menu</Text>
-                <Text style={styles.drawerAccount}>
-                  {parentAccount?.username ?? 'Family account'}
-                </Text>
+                <View style={styles.drawerHeader}>
+                  <Text style={styles.drawerTitle}>Parent Menu</Text>
+                  <View style={styles.accountBadge}>
+                    <MaterialIcons name="account-circle" size={28} color="#0284C7" />
+                    <View style={styles.accountTextCol}>
+                      <Text style={styles.drawerAccount} numberOfLines={1}>
+                        {parentAccount?.username || parentAccount?.displayName || 'Family Account'}
+                      </Text>
+                      {parentAccount?.email ? (
+                        <Text style={styles.drawerAccountEmail} numberOfLines={1}>
+                          {parentAccount.email}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
                 <TouchableOpacity
                   style={styles.drawerItem}
                   onPress={() => {
@@ -376,8 +455,7 @@ export const ParentPanelScreen: React.FC = () => {
                     setCurrentSection(ParentNavSection.ACCOUNT);
                   }}
                 >
-                  <MaterialIcons name="person" size={21} color="#0284C7" />
-                  <MaterialIcons name="person" size={21} color={Colors.kidsSkyBlue} />
+                  <MaterialIcons name="person" size={24} color="#0284C7" />
                   <Text style={styles.drawerItemText}>Profile</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -387,16 +465,24 @@ export const ParentPanelScreen: React.FC = () => {
                     setCurrentSection(ParentNavSection.PIN);
                   }}
                 >
-                  <MaterialIcons name="key" size={21} color="#7C3AED" />
-                  <MaterialIcons name="key" size={21} color={Colors.kidsSkyBlue} />
+                  <MaterialIcons name="vpn-key" size={24} color="#F59E0B" />
                   <Text style={styles.drawerItemText}>Security PIN</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.drawerItem}
+                  onPress={() => {
+                    setIsMenuVisible(false);
+                    setCurrentSection(ParentNavSection.APPEARANCE);
+                  }}
+                >
+                  <MaterialIcons name="palette" size={24} color="#8B5CF6" />
+                  <Text style={styles.drawerItemText}>Appearance</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.drawerItem, styles.logoutItem]}
                   onPress={handleLogout}
                 >
-                  <MaterialIcons name="logout" size={21} color="#DC2626" />
-                  <MaterialIcons name="logout" size={21} color={Colors.kidsCoral} />
+                  <MaterialIcons name="logout" size={24} color="#E52E2E" />
                   <Text style={[styles.drawerItemText, styles.logoutText]}>
                     Log out
                   </Text>
@@ -412,20 +498,12 @@ export const ParentPanelScreen: React.FC = () => {
         onDismiss={() => setShowAddChild(false)}
         onConfirm={(...args) => createChild(...args)}
       />
-      <AddVideoDialog
-        visible={showAddVideo}
-        onDismiss={() => setShowAddVideo(false)}
-        onConfirm={async (title, channel, youtubeId, category) => {
-          const result = await addVideo(title, channel, youtubeId, category);
-          showActionError('Unable to add video', result);
-          if (result.success) await refreshContent();
-        }}
-      />
       <AddChannelDialog
         visible={showAddChannel}
         onDismiss={() => setShowAddChannel(false)}
-        onConfirm={async (title, channelUrlOrId, description, category) => {
-          const result = await addChannel(title, channelUrlOrId, description, category);
+        children={parentChildren}
+        onConfirm={async (title, channelUrlOrId, description, category, childIds) => {
+          const result = await addChannel(title, channelUrlOrId, description, category, childIds);
           showActionError('Unable to add channel', result);
           if (result.success) await refreshContent();
         }}
@@ -433,8 +511,9 @@ export const ParentPanelScreen: React.FC = () => {
       <AddPlaylistDialog
         visible={showAddPlaylist}
         onDismiss={() => setShowAddPlaylist(false)}
-        onConfirm={async (title, playlistId, channelTitle, category) => {
-          const result = await addPlaylist(title, playlistId, channelTitle, category);
+        children={parentChildren}
+        onConfirm={async (title, playlistId, channelTitle, category, childIds) => {
+          const result = await addPlaylist(title, playlistId, channelTitle, category, childIds);
           showActionError('Unable to add playlist', result);
           if (result.success) await refreshContent();
         }}
@@ -445,10 +524,11 @@ export const ParentPanelScreen: React.FC = () => {
         onDismiss={() => setChildToReset(null)}
         onConfirm={async (password) => {
           if (!childToReset) return;
-          showActionError(
-            'Unable to reset password',
-            await resetChildPassword(childToReset.id, password)
-          );
+          const result = await resetChildPassword(childToReset.id, password);
+          showActionError('Unable to reset password', result);
+          if (result.success) {
+            setChildPasswordRevision((revision) => revision + 1);
+          }
         }}
       />
     </SafeAreaView>
@@ -458,36 +538,47 @@ export const ParentPanelScreen: React.FC = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   titleBlock: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 12,
   },
   title: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '800',
+    color: '#000000',
+    fontSize: 20,
+    fontWeight: '900',
   },
   subtitle: {
-    color: '#94A3B8',
-    fontSize: 12,
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '800',
     marginTop: 2,
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    marginRight: 10,
   },
   body: {
     flex: 1,
   },
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
   },
   drawerBackdrop: {
     flex: 1,
@@ -503,20 +594,48 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     elevation: 16,
   },
-  drawerTitle: { color: '#0F172A', fontSize: 21, fontWeight: '900' },
-  drawerAccount: { color: '#64748B', marginTop: 5, marginBottom: 24 },
+  drawerHeader: {
+    marginBottom: 10,
+  },
+  drawerTitle: { color: '#000000', fontSize: 24, fontWeight: '900' },
+  accountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F1F5F9',
+    padding: 12,
+    borderRadius: 14,
+    marginTop: 10,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  accountTextCol: {
+    flex: 1,
+  },
+  drawerAccount: {
+    color: '#000000',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  drawerAccountEmail: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 2,
+  },
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 52,
+    minHeight: 56,
     paddingHorizontal: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E2E8F0',
-    gap: 12,
+    gap: 14,
   },
-  drawerItemText: { color: '#1E293B', fontSize: 15, fontWeight: '700' },
+  drawerItemText: { color: '#000000', fontSize: 17, fontWeight: '900' },
   logoutItem: { marginTop: 12, borderBottomWidth: 0 },
-  logoutText: { color: '#DC2626' },
+  logoutText: { color: '#E52E2E' },
   navItem: {
     flex: 1,
     alignItems: 'center',
@@ -524,14 +643,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   navLabel: {
-    fontSize: 10,
-    marginTop: 2,
-    fontWeight: '600',
+    fontSize: 13,
+    marginTop: 3,
+    fontFamily: 'Nunito-Bold',
+    fontWeight: '800',
   },
   navLabelSelected: {
-    color: '#38BDF8',
+    color: '#E52E2E',
+    fontWeight: '900',
   },
   navLabelUnselected: {
-    color: '#94A3B8',
+    color: '#000000',
+    fontWeight: '800',
   },
 });

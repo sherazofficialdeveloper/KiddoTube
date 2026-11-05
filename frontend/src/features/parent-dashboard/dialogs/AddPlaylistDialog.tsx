@@ -1,19 +1,20 @@
 // src/features/parent-dashboard/dialogs/AddPlaylistDialog.tsx
+import { FontText as Text, FontTextInput as TextInput } from '../../../components/ui/FontText';
 
 import React, { useState } from 'react';
 import {
   Alert,
   View,
-  Text,
   StyleSheet,
   Modal,
   TouchableOpacity,
-  TextInput,
   ScrollView,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { Typography } from '../../../theme/typography';
 import { extractPlaylistId } from '../../../utils/youtube';
+import { ContentAudiencePicker } from '../../../components/ui/ContentAudiencePicker';
+import type { ChildDetailDto } from '../../../types/api';
 
 /**
  * AddPlaylistDialog
@@ -23,11 +24,13 @@ import { extractPlaylistId } from '../../../utils/youtube';
 interface AddPlaylistDialogProps {
   visible: boolean;
   onDismiss: () => void;
+  children: ChildDetailDto[];
   onConfirm: (
     title: string,
     urlOrId: string,
     channelTitle: string,
-    category: string
+    category: string,
+    childIds: string[]
   ) => void;
 }
 
@@ -41,18 +44,21 @@ const CATEGORY_OPTIONS = [
 export const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
   visible,
   onDismiss,
+  children,
   onConfirm,
 }) => {
   const [title, setTitle] = useState('');
   const [playlistUrlOrId, setPlaylistUrlOrId] = useState('');
   const [channelTitle, setChannelTitle] = useState('');
   const [category, setCategory] = useState('LEARNING');
+  const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
 
   const handleClose = () => {
     setTitle('');
     setPlaylistUrlOrId('');
     setChannelTitle('');
     setCategory('LEARNING');
+    setSelectedChildIds([]);
     onDismiss();
   };
 
@@ -69,7 +75,8 @@ export const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
       title.trim(),
       playlistId,
       channelTitle.trim(),
-      category
+      category,
+      selectedChildIds
     );
     handleClose();
   };
@@ -150,6 +157,11 @@ export const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
                 );
               })}
             </View>
+            <ContentAudiencePicker
+              children={children}
+              selectedChildIds={selectedChildIds}
+              onChange={setSelectedChildIds}
+            />
           </ScrollView>
 
           <View style={styles.actions}>
@@ -194,11 +206,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    marginTop: 10,
-    marginBottom: 2,
     fontSize: 14,
     fontWeight: '800',
     color: '#1E293B',
@@ -206,21 +213,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   input: {
-    borderWidth: 1,
     minHeight: 52,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 13,
     fontSize: 16,
     fontWeight: '600',
     color: '#0F172A',
-    marginBottom: 4,
     marginBottom: 6,
     backgroundColor: '#FFFFFF',
   },
@@ -234,56 +235,39 @@ const styles = StyleSheet.create({
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
     backgroundColor: '#F1F5F9',
-    borderWidth: 1,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
   },
   categoryChipActive: {
-    backgroundColor: '#0284C7',
-    borderColor: '#0284C7',
     backgroundColor: '#3A9BE8',
     borderColor: '#3A9BE8',
   },
   categoryChipText: {
-    fontSize: 13,
-    fontWeight: '600',
     fontSize: 14,
     fontWeight: '700',
     color: '#475569',
   },
   categoryChipTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
     fontWeight: '800',
   },
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: 16,
     marginTop: 18,
   },
-  cancelButton: { paddingHorizontal: 12, paddingVertical: 8 },
-  cancelText: { color: '#475569', fontWeight: '700' },
   cancelButton: { paddingHorizontal: 14, paddingVertical: 10 },
   cancelText: { color: '#475569', fontWeight: '800', fontSize: 14 },
   confirmButton: {
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
     backgroundColor: '#3A9BE8',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
     marginLeft: 8,
   },
-  confirmText: { color: '#FFFFFF', fontWeight: '700' },
   confirmText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
 });
