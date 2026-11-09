@@ -85,6 +85,7 @@ export const ParentContentView: React.FC<ParentContentViewProps> = ({
     return names.length ? names.join(', ') : 'Selected children';
   };
   const [contentTab, setContentTab] = useState(0); // 0: Videos, 1: Channels, 2: Playlists, 3: Blocked
+  const [videoRenderLimit, setVideoRenderLimit] = useState(24);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeSort] = useState<SortCriteria>('date_desc');
   const [filterModalType, setFilterModalType] = useState<FilterModalType>(null);
@@ -107,6 +108,16 @@ export const ParentContentView: React.FC<ParentContentViewProps> = ({
   const handleTabChange = (tabIndex: number) => {
     setContentTab(tabIndex);
     setSelectedIds(new Set()); // Reset selection on tab switch
+    setVideoRenderLimit(24);
+  };
+
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    if (contentTab === 0 && layoutMeasurement.height + contentOffset.y >= contentSize.height - 600) {
+      if (videoRenderLimit < sortedVideos.length) {
+        setVideoRenderLimit((prev) => prev + 24);
+      }
+    }
   };
 
   const handleAdd = () => {
@@ -327,7 +338,9 @@ export const ParentContentView: React.FC<ParentContentViewProps> = ({
         stickyHeaderIndices={[1]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        decelerationRate={0.92}
+        decelerationRate="normal"
+        scrollEventThrottle={64}
+        onScroll={handleScroll}
       >
         {/* Index 0: Header title & add button that scrolls away */}
         <View style={styles.header}>
@@ -559,7 +572,7 @@ export const ParentContentView: React.FC<ParentContentViewProps> = ({
                 subtitle="Tap 'Add Video' above to whitelist your first YouTube video."
               />
             ) : (
-              sortedVideos.map((vid) => {
+              sortedVideos.slice(0, videoRenderLimit).map((vid) => {
                 const isSelected = selectedIds.has(vid.id);
                 return (
                   <TouchableOpacity

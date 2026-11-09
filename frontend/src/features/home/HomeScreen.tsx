@@ -341,7 +341,7 @@ export const HomeScreen: React.FC = () => {
         animationType="fade"
         onRequestClose={() => setSelectedOptionsVideo(null)}
       >
-        <TouchableOpacity
+         <TouchableOpacity
           style={styles.optionsBackdrop}
           activeOpacity={1}
           onPress={() => setSelectedOptionsVideo(null)}
@@ -396,10 +396,15 @@ export const HomeScreen: React.FC = () => {
                   onPress={async () => {
                     const vid = selectedOptionsVideo;
                     setSelectedOptionsVideo(null);
+
                     if (isDownloaded(vid.id)) {
                       handleDeleteDownload(vid);
                     } else {
-                      await startVideoDownload(vid);
+                      try {
+                        await startVideoDownload(vid);
+                      } catch (error) {
+                        console.error('Download start error:', error);
+                      }
                     }
                   }}
                 >

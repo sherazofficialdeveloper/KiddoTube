@@ -66,40 +66,41 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ navigation }) => {
     );
 
     const runInit = async () => {
-      const restoredRole =
-        await useParentAdminStore.getState().restoreSession();
-      if (restoredRole === 'parent') {
-        navigation.replace(ScreenState.PARENT_PANEL);
-        return;
-      }
-      if (restoredRole === 'admin') {
-        navigation.replace(ScreenState.ADMIN_PANEL);
-        return;
-      }
+      try {
+        const restoredRole =
+          await useParentAdminStore.getState().restoreSession();
+        if (restoredRole === 'parent') {
+          navigation.replace(ScreenState.PARENT_PANEL);
+          return;
+        }
+        if (restoredRole === 'admin') {
+          navigation.replace(ScreenState.ADMIN_PANEL);
+          return;
+        }
 
-      setInitStatusText('Connecting to safe kids network...');
-      const backendConnected =
-        await useContentStore.getState().initializeAppData();
+        setInitStatusText('Connecting to safe kids network...');
+        const backendConnected =
+          await useContentStore.getState().initializeAppData();
 
-      const session = useContentStore.getState().session;
-      const childToken = useContentStore.getState().childToken;
-      if (session.isAuthenticated && childToken && session.profile) {
-        await useScreenTimeStore.getState().initializeForChild(
-          childToken,
-          session.profile.id,
-          session.profile.parentId,
-          session.profile.dailyLimitMinutes
+        const session = useContentStore.getState().session;
+        const childToken = useContentStore.getState().childToken;
+        if (session.isAuthenticated && childToken && session.profile) {
+          await useScreenTimeStore.getState().initializeForChild(
+            childToken,
+            session.profile.id,
+            session.profile.parentId,
+            session.profile.dailyLimitMinutes
+          );
+        }
+
+        setInitStatusText(
+          backendConnected ? 'Ready to explore! 🚀' : 'Safe offline mode active! 🎈'
         );
-      }
-
-      setInitStatusText(
-        backendConnected ? 'Ready to explore! 🚀' : 'Safe offline mode active! 🎈'
-      );
-
-      // Replace splash with the correct screen immediately
-      if (session.isAuthenticated) {
-        navigation.replace(ScreenState.HOME);
-      } else {
+        navigation.replace(
+          session.isAuthenticated ? ScreenState.HOME : ScreenState.CHILD_LOGIN
+        );
+      } catch (error) {
+        console.error('[SplashScreen] App initialization failed:', error);
         navigation.replace(ScreenState.CHILD_LOGIN);
       }
     };

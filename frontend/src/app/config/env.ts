@@ -44,9 +44,9 @@ export const setBaseUrl = (newUrl: string): void => {
 };
 
 export const API_CONFIG = {
-  connectTimeout: 15000,
-  readTimeout: 15000,
-  writeTimeout: 15000,
+  connectTimeout: 20000,
+  readTimeout: 60000,
+  writeTimeout: 60000,
 } as const;
 
 export const getPrivacyPolicyUrl = (): string => {

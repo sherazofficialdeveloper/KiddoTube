@@ -63,13 +63,18 @@ class DownloadManager {
     nativeDownloadService.addNotificationCancelListener((videoId) => {
       this.cancelDownload(videoId);
     });
+    let lastProgressNotifyTime = 0;
     nativeDownloadService.addDownloadProgressListener((data) => {
       const rec = this.records[data.videoId];
       if (rec && rec.status === 'DOWNLOADING') {
         rec.downloadedBytes = data.downloadedBytes;
         rec.totalBytes = data.totalBytes;
         rec.progressPercent = data.progress;
-        this.notifyListeners();
+        const now = Date.now();
+        if (now - lastProgressNotifyTime >= 350 || data.progress === 100) {
+          lastProgressNotifyTime = now;
+          this.notifyListeners();
+        }
       }
     });
     nativeDownloadService.addDownloadCompletedListener(async (data) => {
@@ -88,6 +93,16 @@ class DownloadManager {
         this.notifyListeners();
       }
     });
+    nativeDownloadService.addDownloadFailedListener(async (data) => {
+      const rec = this.records[data.videoId];
+      if (!rec) return;
+      rec.status = 'FAILED';
+      rec.errorMessage = data.error || 'Download failed';
+      rec.speedBytesPerSec = 0;
+      rec.etaSeconds = 0;
+      await this.persistRecords();
+      this.notifyListeners();
+    });
   }
 
   public static getInstance(): DownloadManager {
@@ -103,19 +118,34 @@ class DownloadManager {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
         const loaded: Record<string, DownloadRecord> = JSON.parse(raw);
-        // Interrupted downloads recover safely as PAUSED on app restart
+        // Keep active records downloading while the Android foreground service
+        // continues independently of the React Native process.
         for (const id of Object.keys(loaded)) {
           if (loaded[id].status !== 'COMPLETED') {
             loaded[id].localUri = undefined;
             if (loaded[id].video) delete (loaded[id].video as any).localUri;
           }
-          if (loaded[id].status === 'DOWNLOADING') {
-            loaded[id].status = 'PAUSED';
-            loaded[id].speedBytesPerSec = 0;
-            loaded[id].etaSeconds = 0;
-          }
         }
         this.records = loaded;
+
+        await Promise.all(Object.values(this.records).map(async (record) => {
+          try {
+            const localFile = await nativeDownloadService.getLocalFile(record.id);
+            if (localFile) {
+              record.status = 'COMPLETED';
+              record.localUri = localFile.localUri;
+              record.totalBytes = localFile.totalBytes;
+              record.downloadedBytes = localFile.totalBytes;
+              record.progressPercent = 100;
+              record.speedBytesPerSec = 0;
+              record.etaSeconds = 0;
+              record.completedAt = record.completedAt || new Date().toISOString();
+              if (record.video) record.video.localUri = localFile.localUri;
+            }
+          } catch (error: any) {
+            console.warn(`[DownloadManager] Could not restore ${record.id}:`, error?.message);
+          }
+        }));
       }
       this.isInitialized = true;
       nativeDownloadService.purgeInvalidDownloads().catch(() => {});
@@ -267,7 +297,7 @@ class DownloadManager {
           video.durationText
         )
         .then((res) => {
-          if (res) {
+          if (res?.localUri) {
             const rec = this.records[video.id];
             if (rec) {
               rec.status = 'COMPLETED';

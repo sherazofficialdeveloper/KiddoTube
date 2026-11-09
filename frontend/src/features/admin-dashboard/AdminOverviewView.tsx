@@ -219,7 +219,7 @@ const StatCard: React.FC<StatCardProps> = ({
 const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 60,
   },
   healthCard: {
     backgroundColor: '#FFFFFF',
@@ -359,15 +359,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
+    overflow: 'hidden',
   },
   auditHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
-    gap: 8,
+    gap: 10,
+    overflow: 'hidden',
   },
   auditTitle: {
-    fontSize: 16,
+    flex: 1,
+    flexShrink: 1,
+    fontSize: 15,
     fontWeight: '900',
     color: '#0F172A',
   },

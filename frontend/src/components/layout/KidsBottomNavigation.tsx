@@ -111,7 +111,7 @@ export const KidsBottomNavigation: React.FC<KidsBottomNavigationProps> = ({
                 <MaterialIcons
                   name={isSelected ? meta.activeIcon : meta.inactiveIcon}
                   size={26}
-                  color={isSelected ? '#E52E2E' : '#000000'}
+                  color={isSelected ? '#E52E2E' : isDark ? '#FFFFFF' : '#000000'}
                 />
               )}
 
@@ -119,7 +119,7 @@ export const KidsBottomNavigation: React.FC<KidsBottomNavigationProps> = ({
                 style={[
                   styles.tabLabel,
                   {
-                    color: isSelected ? '#E52E2E' : '#000000',
+                    color: isSelected ? '#E52E2E' : isDark ? '#FFFFFF' : '#000000',
                     fontWeight: '800',
                   },
                 ]}

@@ -322,8 +322,28 @@ async function moderateContentHandler(req, res, next) {
     }
 
     if (type === 'channel') {
-      if (action === 'REMOVE') await db.deleteChannel(id);
-      else await db.updateChannel(id, { status: CONTENT_STATUS.BLOCKED });
+      if (action === 'REMOVE') {
+        const removed = await db.deleteChannel(id);
+        if (!removed) {
+          return res.status(404).json({ success: false, error: 'Channel not found' });
+        }
+      } else {
+        const updated = await db.updateChannel(id, { status: CONTENT_STATUS.BLOCKED });
+        if (!updated) {
+          return res.status(404).json({ success: false, error: 'Channel not found' });
+        }
+        if (updated.title) {
+          const escaped = updated.title.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const filter = {
+            channelTitle: { $regex: new RegExp(`^${escaped}$`, 'i') }
+          };
+          if (updated.parentId) {
+            filter.parentId = String(updated.parentId);
+          }
+          const dbInstance = await db.getDb();
+          await dbInstance.collection('videos').updateMany(filter, { $set: { status: CONTENT_STATUS.BLOCKED } });
+        }
+      }
     } else if (type === 'playlist') {
       if (action === 'REMOVE') await db.deletePlaylist(id);
       else await db.updatePlaylist(id, { status: CONTENT_STATUS.BLOCKED });

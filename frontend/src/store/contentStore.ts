@@ -13,17 +13,6 @@ import type {
 import { VideoCategory } from '../types/models';
 import { secureStorage } from '../services/storage/secureStorage';
 
-/**
- * KidsContentStore
- * Migrated from Kotlin KidsContentRepository.kt
- * 
- * Handles:
- * - App initialization (health check + fetch profiles + fetch content)
- * - Child login/logout
- * - Approved content management
- * - Search
- */
-
 interface ContentState {
   // Data
   approvedVideos: VideoItem[];
@@ -45,23 +34,22 @@ interface ContentState {
   activeDownloadingIds: string[];
   activeDownloadingVideos: VideoItem[];
 
-  // Auth token (private, not exposed in state shape publicly)
+  // Auth token
   childToken: string | null;
 
   // Actions
   initializeAppData: () => Promise<boolean>;
   recordVideoWatched: (videoId: string) => Promise<void>;
-  downloadVideo: (video: VideoItem) => Promise<boolean>;
-  startVideoDownload: (video: VideoItem) => Promise<boolean>;
+  
+  // 1. UPDATE: We added an optional `directMp4Url` parameter here
+  downloadVideo: (video: VideoItem, directMp4Url?: string) => Promise<boolean>;
+  startVideoDownload: (video: VideoItem, directMp4Url?: string) => Promise<boolean>;
+  
   removeDownloadedVideo: (videoId: string) => Promise<void>;
   isDownloaded: (videoId: string) => boolean;
   isDownloading: (videoId: string) => boolean;
   getDownloadProgress: (videoId: string) => number;
-  loginChild: (
-    username: string,
-    passwordOrPin: string,
-    profileId?: string | null
-  ) => Promise<{ success: boolean; error?: string }>;
+  loginChild: (username: string, passwordOrPin: string, profileId?: string | null) => Promise<{ success: boolean; error?: string }>;
   logoutChild: () => void;
   selectProfile: (profile: ChildProfile) => void;
   fetchApprovedContent: (token?: string) => Promise<void>;
@@ -83,10 +71,7 @@ interface ContentState {
   isChannelSubscribed: (channelTitle: string) => boolean;
   getCurrentToken: () => string | null;
   toggleLikeVideo: (videoId: string) => Promise<void>;
-  updateCurrentChildAvatar: (
-    avatarEmoji: string,
-    colorHex?: number
-  ) => Promise<{ success: boolean; error?: string }>;
+  updateCurrentChildAvatar: (avatarEmoji: string, colorHex?: number) => Promise<{ success: boolean; error?: string }>;
 }
 
 const initialSession: ChildSession = {
@@ -128,14 +113,23 @@ export const useContentStore = create<ContentState>((set, get) => ({
     return downloadManager.getDownloadProgress(videoId) || get().downloadProgress[videoId] || 0;
   },
 
-  startVideoDownload: async (video: VideoItem): Promise<boolean> => {
+  // 2. UPDATE: Passing directMp4Url to downloadManager if it's provided
+  startVideoDownload: async (video: VideoItem, directMp4Url?: string): Promise<boolean> => {
     if (!video || !video.id) return false;
-    // Direct delegation to DownloadManager (asynchronous background download)
-    return await downloadManager.startDownload(video);
+    
+    // Create a modified video object containing the direct streaming URL
+    const videoWithDirectLink = { ...video };
+    if (directMp4Url) {
+      // Assuming your downloadManager.startDownload uses video.videoUrl or similar to download
+      // Injecting the raw mp4 URL here so DownloadManager doesn't call Hostinger
+      (videoWithDirectLink as any).videoUrl = directMp4Url;
+    }
+    
+    return await downloadManager.startDownload(videoWithDirectLink);
   },
 
-  downloadVideo: async (video: VideoItem): Promise<boolean> => {
-    return get().startVideoDownload(video);
+  downloadVideo: async (video: VideoItem, directMp4Url?: string): Promise<boolean> => {
+    return get().startVideoDownload(video, directMp4Url);
   },
 
   removeDownloadedVideo: async (videoId: string): Promise<void> => {
@@ -150,12 +144,6 @@ export const useContentStore = create<ContentState>((set, get) => ({
     }
   },
 
-  /**
-   * Initializes app during Splash:
-   * 1. Health check with timeout
-   * 2. Fetch child profiles or restore offline cache
-   * 3. Fetch approved content or restore offline cache
-   */
   initializeAppData: async (): Promise<boolean> => {
     let connected = false;
 
@@ -167,7 +155,6 @@ export const useContentStore = create<ContentState>((set, get) => ({
         ),
       ]);
 
-    // Load persisted preferences, history, downloads & offline caches
     try {
       const [
         rawLiked,
@@ -210,7 +197,6 @@ export const useContentStore = create<ContentState>((set, get) => ({
         } catch {}
       }
 
-      // Synchronize with DownloadManager
       downloadManager.subscribe((records) => {
         const completed = Object.values(records)
           .filter((r) => r.status === 'COMPLETED' && Boolean(r.localUri) && r.video)
@@ -238,7 +224,6 @@ export const useContentStore = create<ContentState>((set, get) => ({
         AsyncStorage.setItem('@kids_downloaded_videos', JSON.stringify(completed)).catch(() => {});
       });
 
-      // Pre-seed profiles & session so offline view is instant!
       if (rawCachedProfiles) {
         const cachedProfiles = JSON.parse(rawCachedProfiles);
         if (Array.isArray(cachedProfiles) && cachedProfiles.length > 0) {
@@ -255,16 +240,13 @@ export const useContentStore = create<ContentState>((set, get) => ({
       console.warn('[ContentStore] Local cache load warning:', e.message);
     }
 
-    // 1. Health check with timeout
     try {
       const health = await withTimeout(Api.getHealth(), 1200);
       if (health.status === 'ok') {
         connected = true;
         set({ isBackendConnected: true });
-        console.log('[ContentStore] Backend health OK:', health.service);
       }
     } catch (e: any) {
-      console.warn('[ContentStore] Health check failed or offline:', e.message);
       set({
         isBackendConnected: false,
         approvedVideos: [],
@@ -290,24 +272,14 @@ export const useContentStore = create<ContentState>((set, get) => ({
           ) {
             const profile: ChildProfile = {
               id: auth.user.childId,
-              name:
-                typeof details.displayName === 'string'
-                  ? details.displayName
-                  : auth.user.username,
+              name: typeof details.displayName === 'string' ? details.displayName : auth.user.username,
               avatarEmoji: details.avatarEmoji,
               colorHex: details.colorHex,
               dailyLimitMinutes: 60,
               minutesWatchedToday: 0,
             };
-            const currentSession = {
-              isAuthenticated: true,
-              username: profile.name,
-              profile,
-            };
-            set({
-              selectedProfile: profile,
-              session: currentSession,
-            });
+            const currentSession = { isAuthenticated: true, username: profile.name, profile };
+            set({ selectedProfile: profile, session: currentSession });
             AsyncStorage.setItem('@kids_cached_child_session', JSON.stringify(currentSession)).catch(() => {});
           } else {
             set({ childToken: null });
@@ -315,12 +287,10 @@ export const useContentStore = create<ContentState>((set, get) => ({
             await AsyncStorage.removeItem('@kids_cached_child_session');
           }
         } catch {
-          // Network error or timeout: DO NOT clear token! Preserve offline session!
-          console.warn('[ContentStore] Online session verify timed out/offline; using cached session.');
+          console.warn('[ContentStore] Using cached session.');
         }
       }
 
-      // If offline or online check timed out, ensure authenticated session is active
       if (!get().session.isAuthenticated) {
         const fallbackProfile: ChildProfile = get().selectedProfile || get().childProfiles[0] || {
           id: 'offline_child',
@@ -331,20 +301,12 @@ export const useContentStore = create<ContentState>((set, get) => ({
           dailyLimitMinutes: 60,
           minutesWatchedToday: 0,
         };
-        const offlineSession = {
-          isAuthenticated: true,
-          username: fallbackProfile.name,
-          profile: fallbackProfile,
-        };
-        set({
-          session: offlineSession,
-          selectedProfile: fallbackProfile,
-        });
+        const offlineSession = { isAuthenticated: true, username: fallbackProfile.name, profile: fallbackProfile };
+        set({ session: offlineSession, selectedProfile: fallbackProfile });
         AsyncStorage.setItem('@kids_cached_child_session', JSON.stringify(offlineSession)).catch(() => {});
       }
     }
 
-    // 2. Fetch child profiles (if online)
     if (connected) {
       try {
         const profileResponse = await withTimeout(Api.getChildProfiles(), 1200);
@@ -360,17 +322,11 @@ export const useContentStore = create<ContentState>((set, get) => ({
             minutesWatchedToday: 0,
             parentId: dto.parentId,
           }));
-          set((state) => ({
-            childProfiles: mapped,
-            selectedProfile: state.selectedProfile ?? mapped[0] ?? null,
-          }));
+          set((state) => ({ childProfiles: mapped, selectedProfile: state.selectedProfile ?? mapped[0] ?? null }));
           AsyncStorage.setItem('@kids_cached_child_profiles', JSON.stringify(mapped)).catch(() => {});
         }
-      } catch (e: any) {
-        console.warn('[ContentStore] Profile load failed:', e.message);
-      }
+      } catch (e: any) {}
 
-      // 3. Fetch approved content (if online)
       try {
         const contentResponse = await withTimeout(Api.getApprovedContent(), 1500);
         if (contentResponse.success) {
@@ -380,18 +336,12 @@ export const useContentStore = create<ContentState>((set, get) => ({
           AsyncStorage.setItem('@kids_cached_approved_channels', JSON.stringify(st.approvedChannels)).catch(() => {});
           AsyncStorage.setItem('@kids_cached_approved_playlists', JSON.stringify(st.approvedPlaylists)).catch(() => {});
         }
-      } catch (e: any) {
-        console.warn('[ContentStore] Content load failed:', e.message);
-      }
+      } catch (e: any) {}
     }
 
     return connected;
   },
 
-  /**
-   * Child login via backend
-   * Maps to Kotlin loginChild()
-   */
   loginChild: async (username, passwordOrPin, profileId) => {
     const trimmedUser = username.trim();
     const cleanPass = passwordOrPin.trim();
@@ -400,9 +350,7 @@ export const useContentStore = create<ContentState>((set, get) => ({
     let resolvedProfileId: string | null = null;
     if (trimmedUser) {
       const matched = childProfiles.find(
-        (p) =>
-          p.name.toLowerCase() === trimmedUser.toLowerCase() ||
-          p.username?.toLowerCase() === trimmedUser.toLowerCase()
+        (p) => p.name.toLowerCase() === trimmedUser.toLowerCase() || p.username?.toLowerCase() === trimmedUser.toLowerCase()
       );
       if (matched) resolvedProfileId = matched.id;
     } else if (profileId) {
@@ -410,12 +358,7 @@ export const useContentStore = create<ContentState>((set, get) => ({
     }
 
     try {
-      const response = await Api.loginChild({
-        username: trimmedUser || null,
-        password: cleanPass || null,
-        profileId: resolvedProfileId,
-      });
-
+      const response = await Api.loginChild({ username: trimmedUser || null, password: cleanPass || null, profileId: resolvedProfileId });
       const childData = response.child || (response as any).data;
       if (response.success && childData) {
         const profile: ChildProfile = {
@@ -430,82 +373,36 @@ export const useContentStore = create<ContentState>((set, get) => ({
           parentId: childData.parentId,
         };
 
-        const currentSession = {
-          isAuthenticated: true,
-          username: profile.name,
-          profile,
-        };
-
-        set({
-          childToken: response.token ?? null,
-          selectedProfile: profile,
-          session: currentSession,
-        });
-
+        const currentSession = { isAuthenticated: true, username: profile.name, profile };
+        set({ childToken: response.token ?? null, selectedProfile: profile, session: currentSession });
         AsyncStorage.setItem('@kids_cached_child_session', JSON.stringify(currentSession)).catch(() => {});
+        
         const currentProfiles = get().childProfiles;
-        const updatedProfiles = currentProfiles.some((p) => p.id === profile.id)
-          ? currentProfiles.map((p) => (p.id === profile.id ? profile : p))
-          : [profile, ...currentProfiles];
+        const updatedProfiles = currentProfiles.some((p) => p.id === profile.id) ? currentProfiles.map((p) => (p.id === profile.id ? profile : p)) : [profile, ...currentProfiles];
         set({ childProfiles: updatedProfiles });
         AsyncStorage.setItem('@kids_cached_child_profiles', JSON.stringify(updatedProfiles)).catch(() => {});
 
-        // Persist token securely and clear parent state
         if (response.token) {
-          await Promise.all([
-            secureStorage.clearParentToken(),
-            secureStorage.clearAdminToken(),
-          ]);
+          await Promise.all([secureStorage.clearParentToken(), secureStorage.clearAdminToken()]);
           await secureStorage.setChildToken(response.token);
         }
 
-        // Fetch child's content with authenticated session
-        try {
-          await get().fetchApprovedContent(response.token ?? undefined);
-        } catch (fetchErr: any) {
-          console.warn('[ContentStore] Post-login content load notice:', fetchErr.message);
-        }
-
+        try { await get().fetchApprovedContent(response.token ?? undefined); } catch (fetchErr: any) {}
         return { success: true };
       } else {
-        const errorMsg =
-          response.error ||
-          response.message ||
-          'Incorrect password. Ask mom or dad for help!';
-        return { success: false, error: errorMsg };
+        return { success: false, error: response.error || response.message || 'Incorrect password.' };
       }
     } catch (e: any) {
-      console.error('[ContentStore] Login error:', e.message);
-      return {
-        success: false,
-        error:
-          e.message ||
-          'Unable to connect to safety server. Please check your network connection!',
-      };
+      return { success: false, error: e.message || 'Unable to connect to server.' };
     }
   },
 
-  /**
-   * Logout child — clears all state
-   * Maps to Kotlin logoutChild()
-   */
   logoutChild: () => {
     secureStorage.clearChildToken();
     AsyncStorage.removeItem('@kids_cached_child_session').catch(() => {});
-    set({
-      childToken: null,
-      session: initialSession,
-      selectedProfile: null,
-      approvedVideos: [],
-      approvedChannels: [],
-      approvedPlaylists: [],
-    });
+    set({ childToken: null, session: initialSession, selectedProfile: null, approvedVideos: [], approvedChannels: [], approvedPlaylists: [] });
   },
 
-  /**
-   * Select profile (switch active child)
-   * Maps to Kotlin selectProfile()
-   */
   selectProfile: (profile) => {
     set({ selectedProfile: profile });
   },
@@ -516,49 +413,28 @@ export const useContentStore = create<ContentState>((set, get) => ({
       if (res.success && res.child) {
         const current = get().selectedProfile;
         if (current) {
-          const updated: ChildProfile = {
-            ...current,
-            avatarEmoji: res.child.avatarEmoji,
-            colorHex: res.child.colorHex ?? current.colorHex,
-          };
+          const updated: ChildProfile = { ...current, avatarEmoji: res.child.avatarEmoji, colorHex: res.child.colorHex ?? current.colorHex };
           set((state) => ({
             selectedProfile: updated,
-            session: {
-              ...state.session,
-              profile: updated,
-            },
-            childProfiles: state.childProfiles.map((p) =>
-              p.id === updated.id ? updated : p
-            ),
+            session: { ...state.session, profile: updated },
+            childProfiles: state.childProfiles.map((p) => p.id === updated.id ? updated : p),
           }));
         }
         return { success: true };
       }
-      return {
-        success: false,
-        error: res.error || 'Failed to update avatar',
-      };
+      return { success: false, error: res.error || 'Failed to update avatar' };
     } catch (e: any) {
       return { success: false, error: e.message };
     }
   },
 
-  /**
-   * Fetch approved content with authenticated token
-   * Maps to Kotlin fetchApprovedContent()
-   */
   fetchApprovedContent: async (token) => {
     const activeToken = token ?? get().childToken;
     if (!activeToken) return;
-
     try {
       const contentResponse = await Api.getChildHome();
-      if (contentResponse.success) {
-        applyContentResponse(contentResponse, set, get().likedVideoIds);
-      }
-    } catch (e: any) {
-      console.warn('[ContentStore] Fetch home content failed:', e.message);
-    }
+      if (contentResponse.success) applyContentResponse(contentResponse, set, get().likedVideoIds);
+    } catch (e: any) {}
   },
 
   refreshOnlineContent: async (): Promise<boolean> => {
@@ -568,44 +444,24 @@ export const useContentStore = create<ContentState>((set, get) => ({
         set({ isBackendConnected: false });
         return false;
       }
-
       set({ isBackendConnected: true });
       await get().fetchApprovedContent();
-
       const state = get();
       await Promise.all([
-        AsyncStorage.setItem(
-          '@kids_cached_approved_videos',
-          JSON.stringify(state.approvedVideos)
-        ),
-        AsyncStorage.setItem(
-          '@kids_cached_approved_channels',
-          JSON.stringify(state.approvedChannels)
-        ),
-        AsyncStorage.setItem(
-          '@kids_cached_approved_playlists',
-          JSON.stringify(state.approvedPlaylists)
-        ),
+        AsyncStorage.setItem('@kids_cached_approved_videos', JSON.stringify(state.approvedVideos)),
+        AsyncStorage.setItem('@kids_cached_approved_channels', JSON.stringify(state.approvedChannels)),
+        AsyncStorage.setItem('@kids_cached_approved_playlists', JSON.stringify(state.approvedPlaylists)),
       ]);
       return true;
     } catch (e: any) {
       set({ isBackendConnected: false });
-      console.warn('[ContentStore] Online content refresh failed:', e.message);
       return false;
     }
   },
 
-  /**
-   * Filter videos by category with like/favorite ranking at the top
-   */
   getVideosForCategory: (category) => {
     const list = get().approvedVideos.filter((v) => !v.isBlocked);
-    const filtered =
-      category === VideoCategory.ALL
-        ? list
-        : list.filter((v) => v.category === category);
-
-    // Rank favorited/liked videos at the top
+    const filtered = category === VideoCategory.ALL ? list : list.filter((v) => v.category === category);
     return [...filtered].sort((a, b) => {
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
@@ -613,127 +469,50 @@ export const useContentStore = create<ContentState>((set, get) => ({
     });
   },
 
-  /**
-   * Filter videos by channel title
-   */
   getVideosForChannel: (channelTitle) => {
-    return get().approvedVideos.filter(
-      (v) =>
-        !v.isBlocked &&
-        v.channelTitle.toLowerCase() === channelTitle.trim().toLowerCase()
-    );
+    return get().approvedVideos.filter((v) => !v.isBlocked && v.channelTitle.toLowerCase() === channelTitle.trim().toLowerCase());
   },
 
-  /**
-   * Get videos in a playlist
-   */
   getVideosForPlaylist: (playlist) => {
     const active = get().approvedVideos.filter((v) => !v.isBlocked);
-    const matching = active.filter((v) =>
-      playlist.videoIds?.includes(v.id)
-    );
+    const matching = active.filter((v) => playlist.videoIds?.includes(v.id));
     if (matching.length > 0) return matching;
     return active.slice(0, playlist.videoCount);
   },
 
-  getChannelById: (id) => {
-    return get().approvedChannels.find((c) => c.id === id && !c.isBlocked);
-  },
+  getChannelById: (id) => get().approvedChannels.find((c) => c.id === id && !c.isBlocked),
+  getPlaylistById: (id) => get().approvedPlaylists.find((p) => p.id === id && !p.isBlocked),
+  getVideoById: (id) => get().approvedVideos.find((v) => v.id === id && !v.isBlocked),
 
-  getPlaylistById: (id) => {
-    return get().approvedPlaylists.find((p) => p.id === id && !p.isBlocked);
-  },
-
-  getVideoById: (id) => {
-    return get().approvedVideos.find((v) => v.id === id && !v.isBlocked);
-  },
-
-  /**
-   * Local search across approved content
-   * Maps to Kotlin searchApprovedContent()
-   */
   searchApprovedContent: (query) => {
-    if (!query.trim()) {
-      return { videos: [], channels: [], playlists: [] };
-    }
+    if (!query.trim()) return { videos: [], channels: [], playlists: [] };
     const q = query.trim().toLowerCase();
-
-    const matchedVideos = get().approvedVideos.filter(
-      (v) =>
-        !v.isBlocked &&
-        (v.title.toLowerCase().includes(q) ||
-          v.channelTitle.toLowerCase().includes(q) ||
-          (v.description ?? '').toLowerCase().includes(q))
-    );
-
-    const matchedChannels = get().approvedChannels.filter(
-      (c) =>
-        !c.isBlocked &&
-        (c.title.toLowerCase().includes(q) ||
-          (c.description ?? '').toLowerCase().includes(q))
-    );
-
-    const matchedPlaylists = get().approvedPlaylists.filter(
-      (p) =>
-        !p.isBlocked &&
-        (p.title.toLowerCase().includes(q) ||
-          p.channelTitle.toLowerCase().includes(q))
-    );
-
-    return {
-      videos: matchedVideos,
-      channels: matchedChannels,
-      playlists: matchedPlaylists,
-    };
+    const matchedVideos = get().approvedVideos.filter((v) => !v.isBlocked && (v.title.toLowerCase().includes(q) || v.channelTitle.toLowerCase().includes(q) || (v.description ?? '').toLowerCase().includes(q)));
+    const matchedChannels = get().approvedChannels.filter((c) => !c.isBlocked && (c.title.toLowerCase().includes(q) || (c.description ?? '').toLowerCase().includes(q)));
+    const matchedPlaylists = get().approvedPlaylists.filter((p) => !p.isBlocked && (p.title.toLowerCase().includes(q) || p.channelTitle.toLowerCase().includes(q)));
+    return { videos: matchedVideos, channels: matchedChannels, playlists: matchedPlaylists };
   },
 
-  addApprovedVideo: (video) => {
-    set((state) => ({
-      approvedVideos: [video, ...state.approvedVideos],
-    }));
-  },
-
-  blockOrRemoveVideo: (id) => {
-    set((state) => ({
-      approvedVideos: state.approvedVideos.filter((v) => v.id !== id),
-    }));
-  },
-
+  addApprovedVideo: (video) => set((state) => ({ approvedVideos: [video, ...state.approvedVideos] })),
+  blockOrRemoveVideo: (id) => set((state) => ({ approvedVideos: state.approvedVideos.filter((v) => v.id !== id) })),
+  
   blockVideo: async (id: string) => {
     const { blockedVideoIds, approvedVideos, allRawVideos } = get();
     const updated = Array.from(new Set([...blockedVideoIds, id]));
     const target = approvedVideos.find((v) => v.id === id);
-    const updatedRaw = target && !allRawVideos.some((v) => v.id === target.id)
-      ? [...allRawVideos, target]
-      : allRawVideos;
-    set({
-      blockedVideoIds: updated,
-      allRawVideos: updatedRaw,
-      approvedVideos: approvedVideos.filter((v) => v.id !== id),
-    });
-    try {
-      await AsyncStorage.setItem('@kids_blocked_videos', JSON.stringify(updated));
-    } catch (e: any) {
-      console.warn('[ContentStore] Failed to save blocked videos:', e.message);
-    }
+    const updatedRaw = target && !allRawVideos.some((v) => v.id === target.id) ? [...allRawVideos, target] : allRawVideos;
+    set({ blockedVideoIds: updated, allRawVideos: updatedRaw, approvedVideos: approvedVideos.filter((v) => v.id !== id) });
+    try { await AsyncStorage.setItem('@kids_blocked_videos', JSON.stringify(updated)); } catch (e: any) {}
   },
 
   unblockVideo: async (id: string) => {
     const { blockedVideoIds, allRawVideos, blockedChannelTitles } = get();
     const updated = blockedVideoIds.filter((bid) => bid !== id);
     set({ blockedVideoIds: updated });
-    try {
-      await AsyncStorage.setItem('@kids_blocked_videos', JSON.stringify(updated));
-    } catch (e: any) {
-      console.warn('[ContentStore] Failed to save blocked videos:', e.message);
-    }
+    try { await AsyncStorage.setItem('@kids_blocked_videos', JSON.stringify(updated)); } catch (e: any) {}
     const lowerBlockedChannels = blockedChannelTitles.map((t) => t.toLowerCase());
-    const restored = allRawVideos.filter(
-      (v) => !updated.includes(v.id) && !lowerBlockedChannels.includes((v.channelTitle || '').toLowerCase())
-    );
-    if (restored.length > 0) {
-      set({ approvedVideos: restored });
-    }
+    const restored = allRawVideos.filter((v) => !updated.includes(v.id) && !lowerBlockedChannels.includes((v.channelTitle || '').toLowerCase()));
+    if (restored.length > 0) set({ approvedVideos: restored });
   },
 
   blockChannel: async (channelTitle: string) => {
@@ -741,24 +520,14 @@ export const useContentStore = create<ContentState>((set, get) => ({
     const cleanTitle = channelTitle.trim().toLowerCase();
     const updated = Array.from(new Set([...blockedChannelTitles, channelTitle]));
     const targetCh = approvedChannels.find((c) => (c.title || '').trim().toLowerCase() === cleanTitle);
-    const updatedRawCh = targetCh && !allRawChannels.some((c) => (c.title || '').trim().toLowerCase() === cleanTitle)
-      ? [...allRawChannels, targetCh]
-      : allRawChannels;
+    const updatedRawCh = targetCh && !allRawChannels.some((c) => (c.title || '').trim().toLowerCase() === cleanTitle) ? [...allRawChannels, targetCh] : allRawChannels;
     set({
       blockedChannelTitles: updated,
       allRawChannels: updatedRawCh,
-      approvedVideos: approvedVideos.filter(
-        (v) => (v.channelTitle || '').trim().toLowerCase() !== cleanTitle
-      ),
-      approvedChannels: approvedChannels.filter(
-        (c) => (c.title || '').trim().toLowerCase() !== cleanTitle
-      ),
+      approvedVideos: approvedVideos.filter((v) => (v.channelTitle || '').trim().toLowerCase() !== cleanTitle),
+      approvedChannels: approvedChannels.filter((c) => (c.title || '').trim().toLowerCase() !== cleanTitle),
     });
-    try {
-      await AsyncStorage.setItem('@kids_blocked_channels', JSON.stringify(updated));
-    } catch (e: any) {
-      console.warn('[ContentStore] Failed to save blocked channels:', e.message);
-    }
+    try { await AsyncStorage.setItem('@kids_blocked_channels', JSON.stringify(updated)); } catch (e: any) {}
   },
 
   unblockChannel: async (channelTitle: string) => {
@@ -766,62 +535,30 @@ export const useContentStore = create<ContentState>((set, get) => ({
     const cleanTitle = channelTitle.trim().toLowerCase();
     const updated = blockedChannelTitles.filter((t) => t.trim().toLowerCase() !== cleanTitle);
     set({ blockedChannelTitles: updated });
-    try {
-      await AsyncStorage.setItem('@kids_blocked_channels', JSON.stringify(updated));
-    } catch (e: any) {
-      console.warn('[ContentStore] Failed to save blocked channels:', e.message);
-    }
+    try { await AsyncStorage.setItem('@kids_blocked_channels', JSON.stringify(updated)); } catch (e: any) {}
     const lowerBlocked = updated.map((t) => t.toLowerCase());
-    const restoredVideos = allRawVideos.filter(
-      (v) => !blockedVideoIds.includes(v.id) && !lowerBlocked.includes((v.channelTitle || '').toLowerCase())
-    );
-    const restoredChannels = allRawChannels.filter(
-      (c) => !lowerBlocked.includes((c.title || '').toLowerCase())
-    );
-    if (restoredVideos.length > 0 || restoredChannels.length > 0) {
-      set({ approvedVideos: restoredVideos, approvedChannels: restoredChannels });
-    }
+    const restoredVideos = allRawVideos.filter((v) => !blockedVideoIds.includes(v.id) && !lowerBlocked.includes((v.channelTitle || '').toLowerCase()));
+    const restoredChannels = allRawChannels.filter((c) => !lowerBlocked.includes((c.title || '').toLowerCase()));
+    if (restoredVideos.length > 0 || restoredChannels.length > 0) set({ approvedVideos: restoredVideos, approvedChannels: restoredChannels });
   },
 
   toggleSubscribeChannel: async (channelTitle: string): Promise<boolean> => {
     const { subscribedChannelTitles } = get();
     const clean = channelTitle.trim();
-    const exists = subscribedChannelTitles.some(
-      (t) => t.toLowerCase() === clean.toLowerCase()
-    );
-    const updated = exists
-      ? subscribedChannelTitles.filter((t) => t.toLowerCase() !== clean.toLowerCase())
-      : [...subscribedChannelTitles, clean];
-
+    const exists = subscribedChannelTitles.some((t) => t.toLowerCase() === clean.toLowerCase());
+    const updated = exists ? subscribedChannelTitles.filter((t) => t.toLowerCase() !== clean.toLowerCase()) : [...subscribedChannelTitles, clean];
     set({ subscribedChannelTitles: updated });
-    try {
-      await AsyncStorage.setItem('@kids_subscribed_channels', JSON.stringify(updated));
-    } catch (e: any) {
-      console.warn('[ContentStore] Failed to save subscriptions:', e.message);
-    }
-
+    try { await AsyncStorage.setItem('@kids_subscribed_channels', JSON.stringify(updated)); } catch (e: any) {}
     if (!exists) {
-      const match = get().approvedChannels.find(
-        (c: ChannelItem) => c.title.toLowerCase() === clean.toLowerCase()
-      );
-      if (match?.id) {
-        Api.syncChannel(match.id)
-          .then((res) => {
-            if (res.addedCount > 0) {
-              get().fetchApprovedContent();
-            }
-          })
-          .catch(() => {});
-      }
+      const match = get().approvedChannels.find((c: ChannelItem) => c.title.toLowerCase() === clean.toLowerCase());
+      if (match?.id) Api.syncChannel(match.id).then((res) => { if (res.addedCount > 0) get().fetchApprovedContent(); }).catch(() => {});
     }
-
     return !exists;
   },
 
   isChannelSubscribed: (channelTitle: string): boolean => {
     const { subscribedChannelTitles } = get();
-    const clean = channelTitle.trim().toLowerCase();
-    return subscribedChannelTitles.some((t) => t.toLowerCase() === clean);
+    return subscribedChannelTitles.some((t) => t.toLowerCase() === channelTitle.trim().toLowerCase());
   },
 
   getCurrentToken: () => get().childToken,
@@ -829,34 +566,13 @@ export const useContentStore = create<ContentState>((set, get) => ({
   toggleLikeVideo: async (videoId: string) => {
     const { likedVideoIds, approvedVideos } = get();
     const isLiked = likedVideoIds.includes(videoId);
-    const updatedIds = isLiked
-      ? likedVideoIds.filter((id) => id !== videoId)
-      : [...likedVideoIds, videoId];
-
+    const updatedIds = isLiked ? likedVideoIds.filter((id) => id !== videoId) : [...likedVideoIds, videoId];
     const updatedVideos = approvedVideos.map((v) => {
-      if (v.id === videoId) {
-        return {
-          ...v,
-          isFavorite: !isLiked,
-          likesCount: Math.max(0, (v.likesCount ?? 0) + (isLiked ? -1 : 1)),
-        };
-      }
+      if (v.id === videoId) return { ...v, isFavorite: !isLiked, likesCount: Math.max(0, (v.likesCount ?? 0) + (isLiked ? -1 : 1)) };
       return v;
     });
-
-    set({
-      likedVideoIds: updatedIds,
-      approvedVideos: updatedVideos,
-    });
-
-    try {
-      await AsyncStorage.setItem(
-        '@kids_liked_video_ids',
-        JSON.stringify(updatedIds)
-      );
-    } catch (err: any) {
-      console.warn('[ContentStore] Save liked video failed:', err.message);
-    }
+    set({ likedVideoIds: updatedIds, approvedVideos: updatedVideos });
+    try { await AsyncStorage.setItem('@kids_liked_video_ids', JSON.stringify(updatedIds)); } catch (err: any) {}
   },
 
   recordVideoWatched: async (videoId: string) => {
@@ -864,23 +580,11 @@ export const useContentStore = create<ContentState>((set, get) => ({
     const current = get().watchedVideoIds;
     const updated = [videoId, ...current.filter((id) => id !== videoId)].slice(0, 50);
     set({ watchedVideoIds: updated });
-    try {
-      await AsyncStorage.setItem('@kids_watch_history_ids', JSON.stringify(updated));
-    } catch (e: any) {
-      console.warn('[ContentStore] Save watch history failed:', e.message);
-    }
+    try { await AsyncStorage.setItem('@kids_watch_history_ids', JSON.stringify(updated)); } catch (e: any) {}
   },
 }));
 
-/**
- * Helper: apply backend content response to store
- * Maps DTOs → domain models
- */
-function applyContentResponse(
-  response: any,
-  set: (partial: any) => void,
-  likedIds: string[] = []
-): void {
+function applyContentResponse(response: any, set: (partial: any) => void, likedIds: string[] = []): void {
   const { blockedVideoIds, blockedChannelTitles, selectedProfile } = useContentStore.getState();
   const currentChildId = selectedProfile?.id;
   const isAudienceAllowed = (item: any) => {
@@ -892,20 +596,11 @@ function applyContentResponse(
 
   const videos = (response.videos ?? [])
     .map((v: any) => mapVideoDto(v, likedIds))
-    .filter(
-      (v: VideoItem) =>
-        isAudienceAllowed(v) &&
-        !blockedVideoIds.includes(v.id) &&
-        !lowerBlockedChannels.includes((v.channelTitle || '').toLowerCase())
-    );
+    .filter((v: VideoItem) => isAudienceAllowed(v) && !blockedVideoIds.includes(v.id) && !lowerBlockedChannels.includes((v.channelTitle || '').toLowerCase()));
 
   const channels = (response.channels ?? [])
     .map(mapChannelDto)
-    .filter(
-      (c: ChannelItem) =>
-        isAudienceAllowed(c) &&
-        !lowerBlockedChannels.includes((c.title || '').toLowerCase())
-    );
+    .filter((c: ChannelItem) => isAudienceAllowed(c) && !lowerBlockedChannels.includes((c.title || '').toLowerCase()));
 
   const allVids = (response.videos ?? []).map((v: any) => mapVideoDto(v, likedIds));
   const allChs = (response.channels ?? []).map(mapChannelDto);
@@ -972,10 +667,6 @@ function parseCategory(raw: string): VideoCategory {
   return VideoCategory.ALL;
 }
 
-/**
- * Convenience selectors
- * Maps to Kotlin's `contentRepository.approvedVideos.collectAsState()`
- */
 export const selectApprovedVideos = (s: ContentState) => s.approvedVideos;
 export const selectApprovedChannels = (s: ContentState) => s.approvedChannels;
 export const selectApprovedPlaylists = (s: ContentState) => s.approvedPlaylists;

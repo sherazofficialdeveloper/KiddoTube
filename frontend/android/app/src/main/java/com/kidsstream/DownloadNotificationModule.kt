@@ -382,6 +382,27 @@ class DownloadNotificationModule(private val reactContext: ReactApplicationConte
         durationText: String,
         promise: Promise
     ) {
+        val serviceIntent = Intent(reactContext, VideoDownloadService::class.java).apply {
+            action = VideoDownloadService.ACTION_START
+            putExtra("videoId", videoId)
+            putExtra("title", title)
+            putExtra("videoUrl", videoUrl)
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ContextCompat.startForegroundService(reactContext, serviceIntent)
+            } else {
+                reactContext.startService(serviceIntent)
+            }
+            promise.resolve(Arguments.createMap().apply {
+                putString("videoId", videoId)
+                putBoolean("started", true)
+            })
+        } catch (error: Exception) {
+            promise.reject("ERR_START_DOWNLOAD", error.message)
+        }
+        return
+
         val dir = getDownloadsDir()
         val finalFile = File(dir, "$videoId.mp4")
         val tmpFile = File(dir, "$videoId.tmp")
@@ -565,7 +586,7 @@ class DownloadNotificationModule(private val reactContext: ReactApplicationConte
                 val startProgress = ((bytesDownloaded.toDouble() / totalBytes.toDouble()) * 100).toInt().coerceIn(0, 100)
                 showProgressInternal(videoId, title, bytesDownloaded.toDouble(), totalBytes.toDouble(), startProgress, if (isResuming) "Resuming..." else "Starting...", "Connecting...")
 
-                var bytesRead: Int
+                var bytesRead = -1
                 while (inputStream?.read(buffer).also { bytesRead = it ?: -1 } != -1 && !isCancelled.get()) {
                     outputStream.write(buffer, 0, bytesRead)
                     bytesDownloaded += bytesRead
@@ -737,6 +758,24 @@ class DownloadNotificationModule(private val reactContext: ReactApplicationConte
     }
 
     @ReactMethod
+    fun getLocalFile(videoId: String, promise: Promise) {
+        try {
+            val file = File(getDownloadsDir(), "$videoId.mp4")
+            if (file.exists() && file.length() > 64 * 1024L) {
+                val map = Arguments.createMap().apply {
+                    putString("localUri", "file://${file.absolutePath}")
+                    putDouble("totalBytes", file.length().toDouble())
+                }
+                promise.resolve(map)
+            } else {
+                promise.resolve(null)
+            }
+        } catch (e: Exception) {
+            promise.reject("ERR_LOCAL_FILE", e.message)
+        }
+    }
+
+    @ReactMethod
     fun getDownloadsDirectory(promise: Promise) {
         try {
             promise.resolve(getDownloadsDir().absolutePath)
@@ -787,7 +826,9 @@ class DownloadNotificationModule(private val reactContext: ReactApplicationConte
             var purged = 0
             if (files != null) {
                 for (file in files) {
-                    if (file.isFile && (file.length() <= 800000L || file.name.endsWith(".tmp"))) {
+                    // Keep usable partial files so a retry can resume after the
+                    // React Native process is recreated.
+                    if (file.isFile && file.length() <= 64 * 1024L) {
                         file.delete()
                         purged++
                     }

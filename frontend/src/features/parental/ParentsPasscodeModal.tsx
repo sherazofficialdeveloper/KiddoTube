@@ -367,15 +367,18 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   feedbackRow: {
-    height: 24,
+    minHeight: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
+    paddingHorizontal: 16,
   },
   errorText: {
     color: '#DC2626',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   keypadContainer: {
     width: '100%',

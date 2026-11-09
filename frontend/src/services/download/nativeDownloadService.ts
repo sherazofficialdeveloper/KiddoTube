@@ -215,6 +215,17 @@ class NativeDownloadService {
     return true;
   }
 
+  public async getLocalFile(videoId: string): Promise<{ localUri: string; totalBytes: number } | null> {
+    if (this.isAndroid && typeof DownloadNotificationModule.getLocalFile === 'function') {
+      try {
+        return await DownloadNotificationModule.getLocalFile(videoId);
+      } catch (e: any) {
+        console.warn('[NativeDownloadService] getLocalFile error:', e.message);
+      }
+    }
+    return null;
+  }
+
   public async getDownloadsDirectory(): Promise<string | null> {
     if (this.isAndroid) {
       try {
@@ -266,6 +277,13 @@ class NativeDownloadService {
     callback: (data: { videoId: string; localUri: string; totalBytes: number }) => void
   ): () => void {
     const sub = DeviceEventEmitter.addListener('onNativeDownloadCompleted', callback);
+    return () => sub.remove();
+  }
+
+  public addDownloadFailedListener(
+    callback: (data: { videoId: string; error: string }) => void
+  ): () => void {
+    const sub = DeviceEventEmitter.addListener('onNativeDownloadFailed', callback);
     return () => sub.remove();
   }
 }

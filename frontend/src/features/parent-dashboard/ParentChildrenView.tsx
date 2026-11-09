@@ -182,9 +182,8 @@ const ChildCard: React.FC<ChildCardProps> = ({
 
         <View style={styles.childInfo}>
           <Text style={styles.childName}>{child.displayName}</Text>
-          <Text style={styles.childMeta}>
-            Username: {child.username} • {getChildAgeBandLabel(child.ageGroup)}
-          </Text>
+          <Text style={styles.childMeta}>Username: {child.username}</Text>
+          <Text style={styles.childAgeText}>Age: {getChildAgeBandLabel(child.ageGroup)}</Text>
         </View>
 
         <TouchableOpacity style={styles.deleteButton} onPress={onDelete} accessibilityLabel="Delete child profile">
@@ -204,7 +203,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
           <View style={styles.credRow}>
             <Text style={styles.credLabel}>Password:</Text>
             <View style={styles.passwordPill}>
-              <Text style={styles.passwordText} numberOfLines={1} ellipsizeMode="middle">
+              <Text style={styles.passwordText} selectable={true}>
                 {showPassword && password ? password : '••••••••'}
               </Text>
               <TouchableOpacity
@@ -230,7 +229,7 @@ const ChildCard: React.FC<ChildCardProps> = ({
           accessibilityLabel="Copy Credentials"
           activeOpacity={0.8}
         >
-          <MaterialIcons name="content-copy" size={16} color="#0284C7" />
+          <MaterialIcons name="content-copy" size={13} color="#0284C7" />
           <Text style={styles.copyText}>Copy</Text>
         </TouchableOpacity>
       </View>
@@ -361,10 +360,16 @@ const styles = StyleSheet.create({
     color: '#000000',
   },
   childMeta: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#000000',
-    marginTop: 3,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#334155',
+    marginTop: 2,
+  },
+  childAgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0284C7',
+    marginTop: 2,
   },
   deleteButton: {
     width: 44,
@@ -433,20 +438,20 @@ const styles = StyleSheet.create({
   copyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#0284C7',
     backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 6,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    gap: 4,
     flexShrink: 0,
     alignSelf: 'center',
   },
   copyText: {
-    fontSize: 13,
+    fontSize: 11,
     color: '#0284C7',
-    fontWeight: '900',
+    fontWeight: '800',
   },
   childBottomRow: {
     flexDirection: 'row',

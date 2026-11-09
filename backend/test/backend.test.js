@@ -1334,3 +1334,73 @@ test('E2E TEST I - Admin creates parent account -> verified in MongoDB Atlas -> 
   });
   assert.strictEqual(badLoginRes.status, 401);
 });
+
+test('Admin channel removal deletes the channel and all its associated videos from the database', async () => {
+  const testParentId = `test_parent_cas_${Date.now()}`;
+  const testChannelId = `ch_test_${Date.now()}`;
+  const testChannelTitle = `Test Cascade Channel ${Date.now()}`;
+  await db.addChannel({
+    id: testChannelId,
+    parentId: testParentId,
+    channelId: `UC_test_${Date.now()}`,
+    title: testChannelTitle,
+    avatarUrl: 'https://example.com/avatar.jpg',
+    videoCount: 2,
+    category: 'SHOWS',
+    status: 'APPROVED',
+    createdAt: new Date().toISOString()
+  });
+
+  const vid1 = await db.addVideo({
+    id: `vid_cas_1_${Date.now()}`,
+    parentId: testParentId,
+    youtubeId: `y1_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+    title: 'Cascade Video 1',
+    channelTitle: testChannelTitle,
+    thumbnailUrl: 'https://example.com/t1.jpg',
+    durationText: '03:00',
+    category: 'SHOWS',
+    status: 'APPROVED',
+    createdAt: new Date().toISOString()
+  });
+
+  const vid2 = await db.addVideo({
+    id: `vid_cas_2_${Date.now()}`,
+    parentId: testParentId,
+    youtubeId: `y2_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+    title: 'Cascade Video 2',
+    channelTitle: testChannelTitle,
+    thumbnailUrl: 'https://example.com/t2.jpg',
+    durationText: '04:00',
+    category: 'SHOWS',
+    status: 'APPROVED',
+    createdAt: new Date().toISOString()
+  });
+
+  assert.ok(await db.findChannelById(testChannelId));
+  assert.ok(await db.findVideoById(vid1.id));
+  assert.ok(await db.findVideoById(vid2.id));
+
+  const adminLogin = await fetch(`${baseUrl}/api/auth/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier: 'admin', password: 'admin123' })
+  });
+  const adminToken = (await adminLogin.json()).token;
+
+  const removeRes = await fetch(`${baseUrl}/api/admin/content/moderate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${adminToken}`
+    },
+    body: JSON.stringify({ type: 'channel', id: testChannelId, action: 'REMOVE' })
+  });
+  assert.strictEqual(removeRes.status, 200);
+  const removeData = await removeRes.json();
+  assert.strictEqual(removeData.success, true);
+
+  assert.strictEqual(await db.findChannelById(testChannelId), null);
+  assert.strictEqual(await db.findVideoById(vid1.id), null);
+  assert.strictEqual(await db.findVideoById(vid2.id), null);
+});

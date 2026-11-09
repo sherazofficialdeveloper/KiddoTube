@@ -61,7 +61,8 @@ interface ParentAdminState {
   registerParent: (
     username: string,
     email: string,
-    password: string
+    password: string,
+    pin?: string
   ) => Promise<{ success: boolean; error?: string }>;
   logoutParent: () => Promise<void>;
   restoreSession: () => Promise<'parent' | 'admin' | null>;
@@ -256,12 +257,13 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     }
   },
 
-  registerParent: async (user, mail, pass) => {
+  registerParent: async (user, mail, pass, pin) => {
     try {
       const res = await Api.registerParent({
         username: user,
         email: mail,
         password: pass,
+        pin: pin || undefined,
       });
       if (res.success && res.data && res.token) {
         useContentStore.getState().logoutChild();
@@ -789,8 +791,12 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
     try {
       const res = await Api.deleteAdminParent(parentId);
       if (res.success) {
-        await get().fetchAdminParents();
-        await get().fetchAdminDashboard();
+        await Promise.all([
+          get().fetchAdminParents(),
+          get().fetchAdminChildren(),
+          get().fetchAdminContent(),
+          get().fetchAdminDashboard(),
+        ]);
         return { success: true };
       }
       return {
@@ -839,8 +845,11 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
       const res = await Api.deleteAdminChild(childId);
       if (res.success) {
         await useSafeVolumeStore.getState().remove(childId);
-        await get().fetchAdminChildren();
-        await get().fetchAdminDashboard();
+        await Promise.all([
+          get().fetchAdminChildren(),
+          get().fetchAdminContent(),
+          get().fetchAdminDashboard(),
+        ]);
         return { success: true };
       }
       return {
@@ -888,8 +897,14 @@ export const useParentAdminStore = create<ParentAdminState>((set, get) => ({
               adminVideos: state.adminVideos.filter((video) => video.id !== id),
             }));
           } else if (type === 'channel') {
+            const channelToRemove = get().adminChannels.find((channel) => channel.id === id);
             set((state) => ({
               adminChannels: state.adminChannels.filter((channel) => channel.id !== id),
+              adminVideos: state.adminVideos.filter((video) =>
+                channelToRemove?.title
+                  ? video.channelTitle?.trim().toLowerCase() !== channelToRemove.title.trim().toLowerCase()
+                  : true
+              ),
             }));
           } else {
             set((state) => ({

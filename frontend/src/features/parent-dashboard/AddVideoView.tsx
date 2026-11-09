@@ -15,6 +15,7 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { extractYoutubeId, getYoutubeThumbnailUrl } from '../../utils/youtube';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ContentAudiencePicker } from '../../components/ui/ContentAudiencePicker';
 import type { ChildDetailDto } from '../../types/api';
 
@@ -42,6 +43,7 @@ export const AddVideoView: React.FC<AddVideoViewProps> = ({
   children,
   onAddVideo,
 }) => {
+  const insets = useSafeAreaInsets();
   const [ytUrlOrId, setYtUrlOrId] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null); // Optional, not auto-selected
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,7 +99,7 @@ export const AddVideoView: React.FC<AddVideoViewProps> = ({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Top Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={onBack}
@@ -112,7 +114,7 @@ export const AddVideoView: React.FC<AddVideoViewProps> = ({
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 24, 40) }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -173,7 +175,11 @@ export const AddVideoView: React.FC<AddVideoViewProps> = ({
             Optionally organize this video under a category tab. If skipped, it will appear under All.
           </Text>
 
-          <View style={styles.categoryRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryRow}
+          >
             {CATEGORY_OPTIONS.map((cat) => {
               const isSelected = selectedCategory === cat.key;
               return (
@@ -205,7 +211,7 @@ export const AddVideoView: React.FC<AddVideoViewProps> = ({
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
 
           <ContentAudiencePicker
             children={children}
@@ -399,9 +405,10 @@ const styles = StyleSheet.create({
   },
   categoryRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     gap: 10,
-    marginBottom: 24,
+    marginBottom: 20,
+    paddingVertical: 4,
   },
   categoryChip: {
     flexDirection: 'row',

@@ -19,6 +19,7 @@ async function normalizeChildIds(parentId, childIds) {
 async function saveApprovedVideos(parentId, metadata, channelTitle, category, childIds) {
   const existingVideos = await db.getVideos(parentId);
   const byYoutubeId = new Map(existingVideos.map((video) => [video.youtubeId, video]));
+  const toInsert = [];
 
   for (const video of metadata) {
     const existing = byYoutubeId.get(video.youtubeId);
@@ -33,7 +34,7 @@ async function saveApprovedVideos(parentId, metadata, channelTitle, category, ch
       }
       continue;
     }
-    const saved = await db.addVideo({
+    toInsert.push({
       id: `vid_${Date.now()}_${video.youtubeId}`,
       parentId,
       youtubeId: video.youtubeId,
@@ -47,7 +48,13 @@ async function saveApprovedVideos(parentId, metadata, channelTitle, category, ch
       status: CONTENT_STATUS.APPROVED,
       createdAt: new Date().toISOString()
     });
-    byYoutubeId.set(video.youtubeId, saved);
+  }
+
+  if (toInsert.length > 0) {
+    const savedList = await db.addVideos(toInsert);
+    for (const saved of savedList) {
+      byYoutubeId.set(saved.youtubeId, saved);
+    }
   }
 
   return byYoutubeId;

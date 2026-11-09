@@ -87,13 +87,7 @@ export const AdminPanelScreen: React.FC = () => {
       setSearchQuery('');
       if (adminChildren.length === 0) void fetchAdminChildren();
     } else if (currentSection === AdminSection.CONTENT) {
-      if (
-        adminVideos.length === 0 &&
-        adminChannels.length === 0 &&
-        adminPlaylists.length === 0
-      ) {
-        void fetchAdminContent();
-      }
+      void fetchAdminContent();
     }
   }, [
     currentSection,
@@ -140,10 +134,8 @@ export const AdminPanelScreen: React.FC = () => {
         </View>
 
         <View style={styles.titleBlock}>
-          <Text style={styles.topTitle}>KiddoTube Admin Console</Text>
-          <Text style={styles.topSubtitle}>
-            Platform Governance
-          </Text>
+          <Text style={styles.topTitle}>KiddoTube</Text>
+          <Text style={styles.topSubtitle}>Admin Console</Text>
         </View>
 
         <TouchableOpacity
@@ -164,6 +156,7 @@ export const AdminPanelScreen: React.FC = () => {
               fetchAdminDashboard();
               fetchAdminParents();
               fetchAdminChildren();
+              fetchAdminContent();
             }}
             onNavigateSection={(sec, subTab) => {
               if (subTab) {

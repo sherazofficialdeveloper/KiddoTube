@@ -687,6 +687,18 @@ export const VideoPlayerScreen: React.FC<VideoPlayerScreenProps> = ({
             allowFileAccessFromFileURLs={true}
             allowUniversalAccessFromFileURLs={true}
             mixedContentMode="always"
+            userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            onShouldStartLoadWithRequest={(request: any) => {
+              if (
+                request.url.startsWith('https://www.youtube-nocookie.com/embed') ||
+                request.url.startsWith('file://') ||
+                request.url === 'about:blank' ||
+                request.url.includes('youtube.com/iframe_api')
+              ) {
+                return true;
+              }
+              return false;
+            }}
             onMessage={handlePlayerMessage}
             renderError={() => null}
           />
@@ -1392,7 +1404,7 @@ const styles = StyleSheet.create({
   leftEdgeNavBtn: {
     position: 'absolute',
     left: 18,
-    top: '48%',
+    top: '38%',
     marginTop: -24,
     width: 48,
     height: 48,
@@ -1407,7 +1419,7 @@ const styles = StyleSheet.create({
   rightEdgeNavBtn: {
     position: 'absolute',
     right: 18,
-    top: '48%',
+    top: '38%',
     marginTop: -24,
     width: 48,
     height: 48,

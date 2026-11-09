@@ -20,3 +20,4 @@ export {
 
 export { hexLongToColor, getInitial, withAlpha } from './color';
 export { copyToClipboard } from './clipboard';
+export * from './responsive';

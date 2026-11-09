@@ -141,7 +141,7 @@ export const KiddoTubeLogo: React.FC<KiddoTubeLogoProps> = ({
                 },
               ]}
             >
-              Hand-picked video
+              Hand-picked videos
             </Text>
           )}
         </View>

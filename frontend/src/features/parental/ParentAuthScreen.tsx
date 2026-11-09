@@ -46,12 +46,14 @@ export const ParentAuthScreen: React.FC<ParentAuthScreenProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [adminUser, setAdminUser] = useState('');
   const [adminPass, setAdminPass] = useState('');
 
   // Password visibility
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+  const [isPinVisible, setIsPinVisible] = useState(false);
   const [isAdminPassVisible, setIsAdminPassVisible] = useState(false);
 
   // 2-Step Registration Process
@@ -194,6 +196,10 @@ export const ParentAuthScreen: React.FC<ParentAuthScreenProps> = ({
       setErrorMessage('Passwords do not match. Please re-check.');
       return;
     }
+    if (!pin.trim() || !/^\d{4}$/.test(pin.trim())) {
+      setErrorMessage('Please enter a 4-digit Parent Security PIN (digits only).');
+      return;
+    }
 
     setIsLoading(true);
     setErrorMessage(null);
@@ -201,7 +207,8 @@ export const ParentAuthScreen: React.FC<ParentAuthScreenProps> = ({
     const result = await registerParent(
       username.trim(),
       email.trim(),
-      password.trim()
+      password.trim(),
+      pin.trim()
     );
     setIsLoading(false);
 
@@ -800,6 +807,38 @@ export const ParentAuthScreen: React.FC<ParentAuthScreenProps> = ({
                       >
                         <MaterialIcons
                           name={isConfirmPasswordVisible ? 'visibility-off' : 'visibility'}
+                          size={22}
+                          color="#5F6E85"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Input: 4-Digit Parent Security PIN */}
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>4-Digit Parent Security PIN *</Text>
+                    <View style={styles.inputWrapper}>
+                      <TextInput
+                        style={[styles.textInput, { paddingRight: 48 }]}
+                        value={pin}
+                        onChangeText={(t) => {
+                          const digitsOnly = t.replace(/[^0-9]/g, '').slice(0, 4);
+                          setPin(digitsOnly);
+                          setErrorMessage(null);
+                        }}
+                        placeholder="e.g. 1234"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                        maxLength={4}
+                        secureTextEntry={!isPinVisible}
+                      />
+                      <TouchableOpacity
+                        style={styles.eyeButton}
+                        onPress={() => setIsPinVisible(!isPinVisible)}
+                        accessibilityLabel="Toggle PIN visibility"
+                      >
+                        <MaterialIcons
+                          name={isPinVisible ? 'visibility-off' : 'visibility'}
                           size={22}
                           color="#5F6E85"
                         />

@@ -54,10 +54,12 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [registerPin, setRegisterPin] = useState('');
   const [adminUser, setAdminUser] = useState('');
   const [adminPass, setAdminPass] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
+  const [isRegisterPinVisible, setIsRegisterPinVisible] = useState(false);
   const [registerStep, setRegisterStep] = useState<1 | 2>(1);
   const [acceptedPrivacyPolicy, setAcceptedPrivacyPolicy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -80,6 +82,7 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
     setEmail('');
     setPassword('');
     setConfirmPassword('');
+    setRegisterPin('');
     setAdminUser('');
     setAdminPass('');
     setErrorMessage(null);
@@ -88,6 +91,7 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
     setAcceptedPrivacyPolicy(false);
     setIsPasswordVisible(false);
     setIsConfirmPasswordVisible(false);
+    setIsRegisterPinVisible(false);
   };
 
   const handleClose = () => {
@@ -205,12 +209,16 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
       setErrorMessage('Passwords do not match. Please re-enter.');
       return;
     }
+    if (!registerPin.trim() || !/^\d{4}$/.test(registerPin.trim())) {
+      setErrorMessage('Please enter a 4-digit numeric Parent Security PIN');
+      return;
+    }
     setIsLoading(true);
     setErrorMessage(null);
 
     const result = await useParentAdminStore
       .getState()
-      .registerParent(username.trim(), email.trim(), password.trim());
+      .registerParent(username.trim(), email.trim(), password.trim(), registerPin.trim());
 
     setIsLoading(false);
     if (result.success) {
@@ -709,6 +717,45 @@ export const ParentAdminAuthDialog: React.FC<ParentAdminAuthDialogProps> = ({
                           <MaterialIcons
                             name={
                               isConfirmPasswordVisible
+                                ? 'visibility-off'
+                                : 'visibility'
+                            }
+                            size={22}
+                            color={Colors.kidsTextMuted}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>4-Digit Parent Security PIN *</Text>
+                      <View style={styles.passwordWrap}>
+                        <TextInput
+                          style={[styles.input, styles.passwordInput]}
+                          placeholder="e.g. 1234 (digits only)"
+                          placeholderTextColor={Colors.kidsTextMuted}
+                          value={registerPin}
+                          onChangeText={(t) => {
+                            const digits = t.replace(/[^0-9]/g, '').slice(0, 4);
+                            setRegisterPin(digits);
+                            setErrorMessage(null);
+                          }}
+                          keyboardType="numeric"
+                          maxLength={4}
+                          secureTextEntry={!isRegisterPinVisible}
+                        />
+                        <TouchableOpacity
+                          style={styles.eyeButton}
+                          onPress={() =>
+                            setIsRegisterPinVisible(
+                              !isRegisterPinVisible
+                            )
+                          }
+                          accessibilityLabel="Toggle PIN visibility"
+                        >
+                          <MaterialIcons
+                            name={
+                              isRegisterPinVisible
                                 ? 'visibility-off'
                                 : 'visibility'
                             }

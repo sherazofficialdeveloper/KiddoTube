@@ -103,7 +103,7 @@ export const buildYoutubePlayerHtml = (
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <!-- embedUrl: https://www.youtube-nocookie.com/embed/${youtubeId}?controls=${controlsVal}&disablekb=${disablekbVal}&fs=${fsVal}&cc_load_policy=${ccLoadPolicyVal} -->
   <style>
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body, html {
       margin: 0;
       padding: 0;
@@ -111,6 +111,8 @@ export const buildYoutubePlayerHtml = (
       height: 100%;
       background-color: #000000;
       overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
     }
     #playerContainer {
       position: absolute;
@@ -124,30 +126,50 @@ export const buildYoutubePlayerHtml = (
     }
     #player, iframe {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100% !important;
-      height: 100% !important;
+      top: -55px;
+      left: -4%;
+      width: 108% !important;
+      height: calc(100% + 110px) !important;
       border: 0;
       pointer-events: none !important;
       transform: none;
       transform-origin: center center;
     }
     body.mode-big #player, body.mode-big iframe {
-      top: 0;
-      left: 0;
-      width: 100% !important;
-      height: 100% !important;
+      top: -55px;
+      left: -4%;
+      width: 108% !important;
+      height: calc(100% + 110px) !important;
       transform: none;
       transform-origin: center center;
     }
     body.mode-small #player, body.mode-small iframe {
-      top: 0;
-      left: 0;
-      width: 100% !important;
-      height: 100% !important;
+      top: -55px;
+      left: -4%;
+      width: 108% !important;
+      height: calc(100% + 110px) !important;
       transform: none;
       transform-origin: center center;
+    }
+    .top-blackout-mask {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 24px;
+      background-color: #000000;
+      pointer-events: none;
+      z-index: 999;
+    }
+    .bottom-blackout-mask {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 28px;
+      background-color: #000000;
+      pointer-events: none;
+      z-index: 999;
     }
   </style>
 </head>
@@ -156,10 +178,12 @@ export const buildYoutubePlayerHtml = (
     <iframe
       id="player"
       type="text/html"
-      src="https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&controls=${controlsVal}&disablekb=${disablekbVal}&fs=${fsVal}&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=${ccLoadPolicyVal}"
+      src="https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&enablejsapi=1&playsinline=1&controls=0&disablekb=1&fs=0&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=${ccLoadPolicyVal}&origin=https://www.youtube-nocookie.com&widget_referrer=https://www.youtube-nocookie.com"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
       allowfullscreen>
     </iframe>
+    <div class="top-blackout-mask"></div>
+    <div class="bottom-blackout-mask"></div>
   </div>
 
   <script src="https://www.youtube.com/iframe_api"></script>

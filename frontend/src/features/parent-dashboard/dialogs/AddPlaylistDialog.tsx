@@ -4,22 +4,20 @@ import { FontText as Text, FontTextInput as TextInput } from '../../../component
 import React, { useState } from 'react';
 import {
   Alert,
-  View,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { Typography } from '../../../theme/typography';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { extractPlaylistId } from '../../../utils/youtube';
 import { ContentAudiencePicker } from '../../../components/ui/ContentAudiencePicker';
 import type { ChildDetailDto } from '../../../types/api';
-
-/**
- * AddPlaylistDialog
- * Migrated 1:1 from Kotlin ParentPanelScreen.kt → AddPlaylistDialog
- */
 
 interface AddPlaylistDialogProps {
   visible: boolean;
@@ -47,35 +45,49 @@ export const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
   children,
   onConfirm,
 }) => {
-  const [title, setTitle] = useState('');
+  const insets = useSafeAreaInsets();
   const [playlistUrlOrId, setPlaylistUrlOrId] = useState('');
-  const [channelTitle, setChannelTitle] = useState('');
-  const [category, setCategory] = useState('LEARNING');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const detectedPlaylistId = extractPlaylistId(playlistUrlOrId.trim());
 
   const handleClose = () => {
-    setTitle('');
     setPlaylistUrlOrId('');
-    setChannelTitle('');
-    setCategory('LEARNING');
+    setSelectedCategory(null);
     setSelectedChildIds([]);
+    setIsSubmitting(false);
     onDismiss();
   };
 
+  const handlePaste = async () => {
+    try {
+      const text = await Clipboard.getString();
+      if (text) {
+        setPlaylistUrlOrId(text.trim());
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const handleApprove = () => {
-    const playlistId = extractPlaylistId(playlistUrlOrId);
+    const playlistId = extractPlaylistId(playlistUrlOrId.trim());
     if (!playlistId) {
       Alert.alert(
-        'Invalid playlist details',
-        'Enter a valid YouTube playlist URL or ID.'
+        'Invalid Playlist Link',
+        'Please enter a valid YouTube playlist URL or list= ID.'
       );
       return;
     }
+
+    setIsSubmitting(true);
     onConfirm(
-      title.trim(),
+      '', // title resolved automatically by YouTube API
       playlistId,
-      channelTitle.trim(),
-      category,
+      '', // channel title resolved automatically
+      selectedCategory || 'LEARNING',
       selectedChildIds
     );
     handleClose();
@@ -84,28 +96,58 @@ export const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
   return (
     <Modal
       visible={visible}
-      transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={handleClose}
+      presentationStyle="fullScreen"
     >
-      <View style={styles.backdrop}>
-        <View style={styles.dialog}>
-          <Text style={styles.title}>Approve YouTube Playlist</Text>
-
-          <ScrollView
-            contentContainerStyle={{ paddingVertical: 8 }}
-            keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Top Header */}
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleClose}
+            accessibilityLabel="Go back to content"
           >
-            <Text style={styles.fieldLabel}>Custom Playlist Title (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Bedtime Calm & Lullabies"
-              placeholderTextColor="#94A3B8"
-              value={title}
-              onChangeText={setTitle}
-            />
+            <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
+          </TouchableOpacity>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerTitle}>Add YouTube Playlist</Text>
+            <Text style={styles.headerSubtitle}>Approve playlist collection for your kids</Text>
+          </View>
+        </View>
 
-            <Text style={styles.fieldLabel}>YouTube Playlist URL or list= ID *</Text>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom + 24, 40) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Info Banner */}
+          <View style={styles.infoCard}>
+            <MaterialIcons name="security" size={26} color="#0284C7" />
+            <View style={styles.infoTextWrap}>
+              <Text style={styles.infoCardTitle}>Protected Whitelist</Text>
+              <Text style={styles.infoCardBody}>
+                Paste any YouTube playlist link here. All videos within this collection will be verified and added to your kids safe library.
+              </Text>
+            </View>
+          </View>
+
+          {/* Input Card */}
+          <View style={styles.card}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>YouTube Playlist URL or list= ID *</Text>
+              <TouchableOpacity style={styles.pasteBadge} onPress={handlePaste}>
+                <MaterialIcons name="content-paste" size={15} color="#0284C7" />
+                <Text style={styles.pasteBadgeText}>Paste Link</Text>
+              </TouchableOpacity>
+            </View>
+
             <TextInput
               style={styles.input}
               placeholder="https://youtube.com/playlist?list=..."
@@ -113,22 +155,36 @@ export const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
               value={playlistUrlOrId}
               onChangeText={setPlaylistUrlOrId}
               autoCapitalize="none"
+              autoCorrect={false}
             />
 
-            <Text style={styles.fieldLabel}>Channel / Creator (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Channel Name"
-              placeholderTextColor="#94A3B8"
-              value={channelTitle}
-              onChangeText={setChannelTitle}
-            />
+            {detectedPlaylistId ? (
+              <View style={styles.validBadge}>
+                <MaterialIcons name="check-circle" size={16} color="#16A34A" />
+                <Text style={styles.validBadgeText}>Detected ID: {detectedPlaylistId}</Text>
+              </View>
+            ) : null}
 
-            {/* Category Dropdown / Selector */}
-            <Text style={styles.fieldLabel}>Category Tab *</Text>
-            <View style={styles.categoryRow}>
+            {/* Optional Category Selector (None selected by default) */}
+            <View style={styles.categoryHeader}>
+              <Text style={styles.label}>Category Tab (Optional)</Text>
+              {selectedCategory && (
+                <TouchableOpacity onPress={() => setSelectedCategory(null)}>
+                  <Text style={styles.clearCategoryText}>Clear selection</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.categoryHelp}>
+              Optionally organize this playlist under a category tab. If skipped, it will appear under All.
+            </Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryRow}
+            >
               {CATEGORY_OPTIONS.map((cat) => {
-                const isSelected = category === cat.key;
+                const isSelected = selectedCategory === cat.key;
                 return (
                   <TouchableOpacity
                     key={cat.key}
@@ -137,13 +193,15 @@ export const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
                       styles.categoryChip,
                       isSelected && styles.categoryChipActive,
                     ]}
-                    onPress={() => setCategory(cat.key)}
+                    onPress={() => {
+                      setSelectedCategory(isSelected ? null : cat.key);
+                    }}
                   >
                     <MaterialIcons
                       name={cat.icon as any}
-                      size={16}
+                      size={18}
                       color={isSelected ? '#FFFFFF' : '#475569'}
-                      style={{ marginRight: 4 }}
+                      style={{ marginRight: 6 }}
                     />
                     <Text
                       style={[
@@ -156,118 +214,237 @@ export const AddPlaylistDialog: React.FC<AddPlaylistDialogProps> = ({
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
+
             <ContentAudiencePicker
               children={children}
               selectedChildIds={selectedChildIds}
               onChange={setSelectedChildIds}
             />
-          </ScrollView>
 
-          <View style={styles.actions}>
+            {/* Submit Button */}
             <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleClose}
-            >
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.confirmButton}
+              style={[
+                styles.submitButton,
+                (!detectedPlaylistId || isSubmitting) && styles.submitButtonDisabled,
+              ]}
+              activeOpacity={0.85}
               onPress={handleApprove}
+              disabled={!detectedPlaylistId || isSubmitting}
             >
-              <Text style={styles.confirmText}>Approve Playlist</Text>
+              <MaterialIcons
+                name={isSubmitting ? 'hourglass-empty' : 'check'}
+                size={22}
+                color="#FFFFFF"
+              />
+              <Text style={styles.submitButtonText}>
+                {isSubmitting ? 'Approving Playlist...' : 'Approve & Add Playlist'}
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
+  root: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: '#F8FAFC',
+  },
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  dialog: {
-    width: '100%',
-    maxWidth: 400,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  title: {
-    ...Typography.titleLarge,
+  backButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    marginRight: 12,
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 19,
+    fontWeight: '900',
     color: '#0F172A',
-    fontWeight: '700',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 60,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 12,
+  },
+  infoTextWrap: {
+    flex: 1,
+  },
+  infoCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  infoCardBody: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3B82F6',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 2,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
-  fieldLabel: {
-    fontSize: 14,
+  label: {
+    fontSize: 15,
     fontWeight: '800',
-    color: '#1E293B',
-    marginTop: 12,
-    marginBottom: 6,
+    color: '#0F172A',
+  },
+  pasteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 4,
+  },
+  pasteBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0284C7',
   },
   input: {
-    minHeight: 52,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    minHeight: 56,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 14,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
+    marginBottom: 10,
+  },
+  validBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  validBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#16A34A',
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  clearCategoryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  categoryHelp: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 10,
+    lineHeight: 18,
   },
   categoryRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 6,
-    marginBottom: 8,
+    flexWrap: 'nowrap',
+    gap: 10,
+    marginBottom: 20,
+    paddingVertical: 4,
   },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: '#F1F5F9',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
   },
   categoryChipActive: {
-    backgroundColor: '#3A9BE8',
-    borderColor: '#3A9BE8',
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
   },
   categoryChipText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#475569',
   },
   categoryChipTextActive: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  actions: {
+  submitButton: {
+    backgroundColor: '#0284C7',
+    borderRadius: 14,
+    paddingVertical: 16,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    elevation: 2,
+    marginTop: 8,
   },
-  cancelButton: { paddingHorizontal: 14, paddingVertical: 10 },
-  cancelText: { color: '#475569', fontWeight: '800', fontSize: 14 },
-  confirmButton: {
-    backgroundColor: '#3A9BE8',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginLeft: 8,
+  submitButtonDisabled: {
+    backgroundColor: '#94A3B8',
+    elevation: 0,
   },
-  confirmText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
+  submitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
 });

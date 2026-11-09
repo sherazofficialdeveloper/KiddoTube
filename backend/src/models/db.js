@@ -587,8 +587,96 @@ class MongoDatabase {
 
   async deleteChild(id) {
     const db = await this.getDb();
-    await db.collection('children').deleteOne({ _id: String(id) });
-    await db.collection('watchTimeRecords').deleteMany({ childId: String(id) });
+    const childIdStr = String(id);
+    await db.collection('children').deleteOne({ _id: childIdStr });
+    await db.collection('watchTimeRecords').deleteMany({ childId: childIdStr });
+    await db.collection('sessions').deleteMany({ childId: childIdStr });
+
+    // 1. Cascade delete or update Channels assigned to this child
+    try {
+      const channels = await db.collection('channels').find({
+        $or: [
+          { childIds: childIdStr },
+          { childIds: [childIdStr] }
+        ]
+      }).toArray();
+
+      for (const channel of channels) {
+        const remaining = (channel.childIds || []).map(String).filter((c) => c !== childIdStr);
+        if (remaining.length === 0) {
+          // Exclusively assigned to this child (or all assigned children now deleted) -> Delete channel completely
+          await db.collection('channels').deleteOne({ _id: channel._id });
+          // Also delete all videos from this channel under this parent
+          if (channel.title) {
+            const escaped = channel.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            await db.collection('videos').deleteMany({
+              parentId: channel.parentId,
+              channelTitle: { $regex: new RegExp(`^${escaped}$`, 'i') }
+            });
+          }
+        } else {
+          // Still assigned to other children -> Just remove this childId from the audience
+          await db.collection('channels').updateOne(
+            { _id: channel._id },
+            { $set: { childIds: remaining } }
+          );
+        }
+      }
+    } catch (chErr) {
+      console.warn(`[db.deleteChild] Error cascading channels for child ${childIdStr}:`, chErr.message);
+    }
+
+    // 2. Cascade delete or update Playlists assigned to this child
+    try {
+      const playlists = await db.collection('playlists').find({
+        $or: [
+          { childIds: childIdStr },
+          { childIds: [childIdStr] }
+        ]
+      }).toArray();
+
+      for (const playlist of playlists) {
+        const remaining = (playlist.childIds || []).map(String).filter((c) => c !== childIdStr);
+        if (remaining.length === 0) {
+          await db.collection('playlists').deleteOne({ _id: playlist._id });
+        } else {
+          await db.collection('playlists').updateOne(
+            { _id: playlist._id },
+            { $set: { childIds: remaining } }
+          );
+        }
+      }
+    } catch (plErr) {
+      console.warn(`[db.deleteChild] Error cascading playlists for child ${childIdStr}:`, plErr.message);
+    }
+
+    // 3. Cascade delete or update Videos assigned to this child
+    try {
+      const videos = await db.collection('videos').find({
+        $or: [
+          { childIds: childIdStr },
+          { childIds: [childIdStr] },
+          { childId: childIdStr }
+        ]
+      }).toArray();
+
+      for (const video of videos) {
+        const remaining = (video.childIds || []).map(String).filter((c) => c !== childIdStr);
+        if (remaining.length === 0) {
+          // Exclusively assigned to this child (or all assigned children now deleted) -> Delete video completely
+          await db.collection('videos').deleteOne({ _id: video._id });
+        } else {
+          // Still assigned to other children -> Just remove this childId from the audience
+          await db.collection('videos').updateOne(
+            { _id: video._id },
+            { $set: { childIds: remaining } }
+          );
+        }
+      }
+    } catch (vidErr) {
+      console.warn(`[db.deleteChild] Error cascading videos for child ${childIdStr}:`, vidErr.message);
+    }
+
     return true;
   }
 
@@ -668,8 +756,30 @@ class MongoDatabase {
 
   async deleteChannel(id) {
     const db = await this.getDb();
-    await db.collection('channels').deleteOne({ _id: String(id) });
-    return true;
+    let channel = await this.findChannelById(id);
+    if (!channel) {
+      const raw = await db.collection('channels').findOne({
+        $or: [{ _id: String(id) }, { id: String(id) }]
+      });
+      if (raw) {
+        channel = this.mapDoc(raw);
+      }
+    }
+    const result = await db.collection('channels').deleteOne({
+      $or: [{ _id: String(id) }, { id: String(id) }]
+    });
+    if (channel && channel.title) {
+      const cleanTitle = channel.title.trim();
+      const escaped = cleanTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const filter = {
+        channelTitle: { $regex: new RegExp(`^${escaped}$`, 'i') }
+      };
+      if (channel.parentId) {
+        filter.parentId = String(channel.parentId);
+      }
+      await db.collection('videos').deleteMany(filter);
+    }
+    return result.deletedCount > 0 || Boolean(channel);
   }
 
   async getAllSystemChannels() {
@@ -774,6 +884,27 @@ class MongoDatabase {
     };
     await db.collection('videos').insertOne(doc);
     return this.mapDoc(doc);
+  }
+
+  async addVideos(videoList) {
+    if (!videoList || videoList.length === 0) return [];
+    const db = await this.getDb();
+    const docs = videoList.map((videoData) => ({
+      _id: videoData.id || `vid_${Date.now()}_${videoData.youtubeId}`,
+      parentId: String(videoData.parentId),
+      youtubeId: videoData.youtubeId,
+      title: videoData.title,
+      channelTitle: videoData.channelTitle || 'Approved Channel',
+      thumbnailUrl: videoData.thumbnailUrl,
+      durationText: videoData.durationText || '05:00',
+      category: videoData.category || 'LEARNING',
+      childIds: Array.isArray(videoData.childIds) ? videoData.childIds.map(String) : [],
+      description: videoData.description || '',
+      status: videoData.status || CONTENT_STATUS.APPROVED,
+      createdAt: videoData.createdAt || new Date().toISOString()
+    }));
+    await db.collection('videos').insertMany(docs, { ordered: false });
+    return docs.map(d => this.mapDoc(d));
   }
 
   async updateVideo(id, updateFields) {

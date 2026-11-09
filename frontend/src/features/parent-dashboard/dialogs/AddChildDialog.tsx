@@ -43,6 +43,7 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [selectedEmoji, setSelectedEmoji] = useState(CHILD_AVATARS[0]);
@@ -59,6 +60,7 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
   const handleClose = () => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setUsername('');
+    setDisplayName('');
     setPassword('');
     setIsPasswordVisible(false);
     setSelectedEmoji(CHILD_AVATARS[0]);
@@ -149,9 +151,10 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
     setErrorMessage(null);
 
     try {
+      const resolvedDisplayName = displayName.trim() || trimmedUser;
       const result = await onConfirm(
         trimmedUser,
-        trimmedUser, // Display name defaults to username
+        resolvedDisplayName,
         trimmedPass,
         selectedEmoji,
         selectedColor,
@@ -190,7 +193,7 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
       onRequestClose={handleClose}
       testID="add_child_dialog"
     >
-      <View style={[styles.backdrop, { paddingBottom: Math.max(insets.bottom + 16, 40) }]}>
+      <View style={[styles.backdrop, { paddingTop: Math.max(insets.top + 16, 24), paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
         <View style={styles.dialog}>
           <View style={styles.headerRow}>
             <View>
@@ -224,14 +227,14 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
                 <Text style={styles.previewEmoji}>{selectedEmoji}</Text>
               </View>
               <Text style={styles.previewLabel}>
-                {username.trim() || 'New Child'}
+                {displayName.trim() || username.trim() || 'New Child'}
               </Text>
             </View>
 
-            {/* Child Name with Label + Real-time Check */}
+            {/* Child Username with Label + Real-time Check */}
             <View style={styles.fieldBlock}>
               <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Child Name</Text>
+                <Text style={styles.inputLabel}>Child Username *</Text>
                 {usernameStatus === 'checking' && (
                   <ActivityIndicator size="small" color="#0284C7" />
                 )}
@@ -246,6 +249,8 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
                 onChangeText={handleUsernameChange}
                 autoCapitalize="none"
                 autoCorrect={false}
+                placeholder="e.g. kiddo_star"
+                placeholderTextColor="#94A3B8"
               />
               {/* Live GitHub-style Feedback message */}
               {usernameFeedback ? (
@@ -278,6 +283,19 @@ export const AddChildDialog: React.FC<AddChildDialogProps> = ({
                   </Text>
                 </View>
               ) : null}
+            </View>
+
+            {/* Display Name with Label */}
+            <View style={styles.fieldBlock}>
+              <Text style={styles.inputLabel}>Display Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Ali or Sheraz (Optional)"
+                placeholderTextColor="#94A3B8"
+                value={displayName}
+                onChangeText={setDisplayName}
+                autoCapitalize="words"
+              />
             </View>
 
             {/* Child Password with Label */}

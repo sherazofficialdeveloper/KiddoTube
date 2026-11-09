@@ -209,6 +209,9 @@ export const ParentPanelScreen: React.FC = () => {
           onPress: async () => {
             const result = await deleteChild(child.id);
             showActionError('Unable to delete profile', result);
+            if (result.success) {
+              await refreshContent();
+            }
           },
         },
       ]
@@ -270,7 +273,7 @@ export const ParentPanelScreen: React.FC = () => {
         <View style={styles.titleBlock}>
           <Text style={styles.title}>Parent Dashboard</Text>
           <Text style={styles.subtitle}>
-            • Hand-picked video
+            • Hand-picked videos
           </Text>
         </View>
       </View>

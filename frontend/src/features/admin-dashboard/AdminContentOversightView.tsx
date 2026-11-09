@@ -58,10 +58,12 @@ export const AdminContentOversightView: React.FC<AdminContentOversightViewProps>
   const [contentType, setContentType] = useState<'video' | 'channel' | 'playlist'>(
     initialContentType || 'video'
   );
+  const [videoRenderLimit, setVideoRenderLimit] = useState(24);
 
   React.useEffect(() => {
     if (initialContentType) {
       setContentType(initialContentType);
+      setVideoRenderLimit(24);
     }
   }, [initialContentType]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -388,6 +390,15 @@ export const AdminContentOversightView: React.FC<AdminContentOversightViewProps>
     }
   };
 
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    if (contentType === 'video' && layoutMeasurement.height + contentOffset.y >= contentSize.height - 600) {
+      if (videoRenderLimit < processedVideos.length) {
+        setVideoRenderLimit((prev) => prev + 24);
+      }
+    }
+  };
+
   return (
     <View style={styles.root}>
       {/* Scrollable container with sticky single-line filter bar */}
@@ -395,9 +406,11 @@ export const AdminContentOversightView: React.FC<AdminContentOversightViewProps>
         stickyHeaderIndices={[1]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        decelerationRate={0.92}
+        decelerationRate="normal"
         removeClippedSubviews
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={64}
+        onScroll={handleScroll}
       >
         {/* Index 0: Header title, description & search bar that scroll away */}
         <View style={styles.headerBlock}>
@@ -450,7 +463,10 @@ export const AdminContentOversightView: React.FC<AdminContentOversightViewProps>
               <TouchableOpacity
                 key={type}
                 style={[styles.filterPill, contentType === type && styles.filterPillActive]}
-                onPress={() => setContentType(type)}
+                onPress={() => {
+                  setContentType(type);
+                  setVideoRenderLimit(24);
+                }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: contentType === type }}
               >
@@ -620,7 +636,7 @@ export const AdminContentOversightView: React.FC<AdminContentOversightViewProps>
             <Text style={styles.emptySub}>Try adjusting search query or sort filter.</Text>
           </View>
         ) : (
-          processedVideos.map((vid) => (
+          processedVideos.slice(0, videoRenderLimit).map((vid) => (
             <View key={vid.id} style={styles.card}>
               <View style={styles.cardMain}>
                 {/* Thumbnail */}
@@ -749,24 +765,46 @@ export const AdminContentOversightView: React.FC<AdminContentOversightViewProps>
           </View>
         ) : processedPlaylists.map((playlist) => (
           <View key={playlist.id} style={styles.card}>
-            <Text style={styles.cardTitle}>{playlist.title}</Text>
-            <Text style={styles.cardMeta}>
-              Parent: {resolveParentName(playlist.parentId, playlist.parentName)} • {formatDate(playlist.createdAt)}
-            </Text>
-            <Text style={styles.cardMeta}>
-              For: {playlist.allowedChildNames && playlist.allowedChildNames.length > 0
-                ? playlist.allowedChildNames.join(', ')
-                : audienceLabel(playlist.childIds)}
-            </Text>
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => confirmRemoveOther('playlist', playlist.id, playlist.title)}
-              disabled={removingVideoId === playlist.id}
-            >
-              <Text style={styles.removeText}>
-                {removingVideoId === playlist.id ? 'Removing...' : 'Remove'}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={styles.thumbWrap}>
+                {playlist.thumbnailUrl ? (
+                  <Image source={{ uri: playlist.thumbnailUrl }} style={styles.thumb} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.thumb, styles.playlistThumbPlaceholder]}>
+                    <MaterialIcons name="playlist-play" size={28} color="#0284C7" />
+                  </View>
+                )}
+                {playlist.videoCount ? (
+                  <View style={styles.durationBadge}>
+                    <Text style={styles.durationText}>{playlist.videoCount} vids</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={[styles.cardInfo, { flex: 1 }]}>
+                <Text style={styles.cardTitle} numberOfLines={2}>{playlist.title}</Text>
+                {playlist.channelTitle ? (
+                  <Text style={styles.channelText} numberOfLines={1}>📺 {playlist.channelTitle}</Text>
+                ) : null}
+                <Text style={styles.cardMeta}>
+                  📅 {formatDate(playlist.createdAt)} • Parent: <Text style={styles.metaHighlight}>{resolveParentName(playlist.parentId, playlist.parentName)}</Text>
+                </Text>
+                <Text style={styles.cardMeta}>
+                  For: {playlist.allowedChildNames && playlist.allowedChildNames.length > 0
+                    ? playlist.allowedChildNames.join(', ')
+                    : audienceLabel(playlist.childIds)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => confirmRemoveOther('playlist', playlist.id, playlist.title)}
+                disabled={removingVideoId === playlist.id}
+              >
+                <MaterialIcons name="delete" size={16} color="#DC2626" />
+                <Text style={styles.removeText}>
+                  {removingVideoId === playlist.id ? 'Removing...' : 'Remove'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )))}
       </ScrollView>
@@ -1102,6 +1140,11 @@ const styles = StyleSheet.create({
     color: '#0284C7',
     fontWeight: '900',
     fontSize: 18,
+  },
+  playlistThumbPlaceholder: {
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',

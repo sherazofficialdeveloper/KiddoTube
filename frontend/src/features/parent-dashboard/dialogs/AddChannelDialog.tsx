@@ -4,21 +4,19 @@ import { FontText as Text, FontTextInput as TextInput } from '../../../component
 import React, { useState } from 'react';
 import {
   Alert,
-  View,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { Typography } from '../../../theme/typography';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { ContentAudiencePicker } from '../../../components/ui/ContentAudiencePicker';
 import type { ChildDetailDto } from '../../../types/api';
-
-/**
- * AddChannelDialog
- * Migrated 1:1 from Kotlin ParentPanelScreen.kt → AddChannelDialog
- */
 
 interface AddChannelDialogProps {
   visible: boolean;
@@ -46,34 +44,47 @@ export const AddChannelDialog: React.FC<AddChannelDialogProps> = ({
   children,
   onConfirm,
 }) => {
-  const [title, setTitle] = useState('');
+  const insets = useSafeAreaInsets();
   const [channelUrlOrId, setChannelUrlOrId] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('SHOWS');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedChildIds, setSelectedChildIds] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleClose = () => {
-    setTitle('');
     setChannelUrlOrId('');
-    setDescription('');
-    setCategory('SHOWS');
+    setSelectedCategory(null);
     setSelectedChildIds([]);
+    setIsSubmitting(false);
     onDismiss();
   };
 
+  const handlePaste = async () => {
+    try {
+      const text = await Clipboard.getString();
+      if (text) {
+        setChannelUrlOrId(text.trim());
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const handleApprove = () => {
-    if (!channelUrlOrId.trim()) {
+    const cleanUrl = channelUrlOrId.trim();
+    if (!cleanUrl) {
       Alert.alert(
-        'Missing channel details',
-        'Enter a YouTube channel URL, handle, or ID.'
+        'Missing Channel Link',
+        'Please enter a YouTube channel URL, handle (@channel), or channel ID.'
       );
       return;
     }
+
+    setIsSubmitting(true);
     onConfirm(
-      title.trim(),
-      channelUrlOrId.trim(),
-      description.trim(),
-      category,
+      '', // title resolved automatically by YouTube API
+      cleanUrl,
+      '', // description omitted
+      selectedCategory || 'SHOWS',
       selectedChildIds
     );
     handleClose();
@@ -82,54 +93,88 @@ export const AddChannelDialog: React.FC<AddChannelDialogProps> = ({
   return (
     <Modal
       visible={visible}
-      transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={handleClose}
+      presentationStyle="fullScreen"
     >
-      <View style={styles.backdrop}>
-        <View style={styles.dialog}>
-          <Text style={styles.title}>Approve YouTube Channel</Text>
-          <Text style={styles.helpText}>
-            Optional: enter a custom name for children to see. Otherwise, the YouTube channel name is used.
-          </Text>
-
-          <ScrollView
-            contentContainerStyle={{ paddingVertical: 8 }}
-            keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Top Header */}
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleClose}
+            accessibilityLabel="Go back to content"
           >
-            <Text style={styles.fieldLabel}>Custom Channel Name (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Nursery Songville"
-              placeholderTextColor="#94A3B8"
-              value={title}
-              onChangeText={setTitle}
-            />
+            <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
+          </TouchableOpacity>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerTitle}>Add YouTube Channel</Text>
+            <Text style={styles.headerSubtitle}>Approve creator channel for your children</Text>
+          </View>
+        </View>
 
-            <Text style={styles.fieldLabel}>YouTube Channel URL or @Handle *</Text>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom + 24, 40) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Info Banner */}
+          <View style={styles.infoCard}>
+            <MaterialIcons name="security" size={26} color="#0284C7" />
+            <View style={styles.infoTextWrap}>
+              <Text style={styles.infoCardTitle}>Protected Whitelist</Text>
+              <Text style={styles.infoCardBody}>
+                Paste any YouTube channel link or @handle. All videos from this creator will be safely approved for your kids.
+              </Text>
+            </View>
+          </View>
+
+          {/* Input Card */}
+          <View style={styles.card}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>YouTube Channel URL or @Handle *</Text>
+              <TouchableOpacity style={styles.pasteBadge} onPress={handlePaste}>
+                <MaterialIcons name="content-paste" size={15} color="#0284C7" />
+                <Text style={styles.pasteBadgeText}>Paste Link</Text>
+              </TouchableOpacity>
+            </View>
+
             <TextInput
               style={styles.input}
-              placeholder="https://youtube.com/@channel or UC..."
+              placeholder="https://youtube.com/@creator or channel URL"
               placeholderTextColor="#94A3B8"
               value={channelUrlOrId}
               onChangeText={setChannelUrlOrId}
               autoCapitalize="none"
+              autoCorrect={false}
             />
 
-            <Text style={styles.fieldLabel}>Description (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Description for kids"
-              placeholderTextColor="#94A3B8"
-              value={description}
-              onChangeText={setDescription}
-            />
+            {/* Optional Category Selector (None selected by default) */}
+            <View style={styles.categoryHeader}>
+              <Text style={styles.label}>Category Tab (Optional)</Text>
+              {selectedCategory && (
+                <TouchableOpacity onPress={() => setSelectedCategory(null)}>
+                  <Text style={styles.clearCategoryText}>Clear selection</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.categoryHelp}>
+              Optionally organize this channel under a category tab. If skipped, it will appear under All.
+            </Text>
 
-            {/* Category Dropdown / Selector */}
-            <Text style={styles.fieldLabel}>Category Tab *</Text>
-            <View style={styles.categoryRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryRow}
+            >
               {CATEGORY_OPTIONS.map((cat) => {
-                const isSelected = category === cat.key;
+                const isSelected = selectedCategory === cat.key;
                 return (
                   <TouchableOpacity
                     key={cat.key}
@@ -138,13 +183,15 @@ export const AddChannelDialog: React.FC<AddChannelDialogProps> = ({
                       styles.categoryChip,
                       isSelected && styles.categoryChipActive,
                     ]}
-                    onPress={() => setCategory(cat.key)}
+                    onPress={() => {
+                      setSelectedCategory(isSelected ? null : cat.key);
+                    }}
                   >
                     <MaterialIcons
                       name={cat.icon as any}
-                      size={16}
+                      size={18}
                       color={isSelected ? '#FFFFFF' : '#475569'}
-                      style={{ marginRight: 4 }}
+                      style={{ marginRight: 6 }}
                     />
                     <Text
                       style={[
@@ -157,119 +204,221 @@ export const AddChannelDialog: React.FC<AddChannelDialogProps> = ({
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
+
             <ContentAudiencePicker
               children={children}
               selectedChildIds={selectedChildIds}
               onChange={setSelectedChildIds}
             />
-          </ScrollView>
 
-          <View style={styles.actions}>
+            {/* Submit Button */}
             <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleClose}
-            >
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.confirmButton}
+              style={[
+                styles.submitButton,
+                (!channelUrlOrId.trim() || isSubmitting) && styles.submitButtonDisabled,
+              ]}
+              activeOpacity={0.85}
               onPress={handleApprove}
+              disabled={!channelUrlOrId.trim() || isSubmitting}
             >
-              <Text style={styles.confirmText}>Approve Channel</Text>
+              <MaterialIcons
+                name={isSubmitting ? 'hourglass-empty' : 'check'}
+                size={22}
+                color="#FFFFFF"
+              />
+              <Text style={styles.submitButtonText}>
+                {isSubmitting ? 'Approving Channel...' : 'Approve & Add Channel'}
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
+  root: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: '#F8FAFC',
+  },
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  dialog: {
-    width: '100%',
-    maxWidth: 400,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  title: {
-    ...Typography.titleLarge,
+  backButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    marginRight: 12,
+  },
+  headerTitleWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 19,
+    fontWeight: '900',
     color: '#0F172A',
-    fontWeight: '700',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 60,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 12,
+  },
+  infoTextWrap: {
+    flex: 1,
+  },
+  infoCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  infoCardBody: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3B82F6',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 2,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
-  helpText: { color: '#64748B', fontSize: 12, marginBottom: 4 },
-  fieldLabel: {
-    fontSize: 14,
+  label: {
+    fontSize: 15,
     fontWeight: '800',
-    color: '#1E293B',
-    marginTop: 12,
-    marginBottom: 6,
+    color: '#0F172A',
+  },
+  pasteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 4,
+  },
+  pasteBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0284C7',
   },
   input: {
-    minHeight: 52,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    minHeight: 56,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
     borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 14,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
+    marginBottom: 16,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  clearCategoryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  categoryHelp: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 10,
+    lineHeight: 18,
   },
   categoryRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 6,
-    marginBottom: 8,
+    flexWrap: 'nowrap',
+    gap: 10,
+    marginBottom: 20,
+    paddingVertical: 4,
   },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: '#F1F5F9',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
   },
   categoryChipActive: {
-    backgroundColor: '#3A9BE8',
-    borderColor: '#3A9BE8',
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
   },
   categoryChipText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#475569',
   },
   categoryChipTextActive: {
     color: '#FFFFFF',
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  actions: {
+  submitButton: {
+    backgroundColor: '#0284C7',
+    borderRadius: 14,
+    paddingVertical: 16,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    elevation: 2,
+    marginTop: 8,
   },
-  cancelButton: { paddingHorizontal: 14, paddingVertical: 10 },
-  cancelText: { color: '#475569', fontWeight: '800', fontSize: 14 },
-  confirmButton: {
-    backgroundColor: '#3A9BE8',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginLeft: 8,
+  submitButtonDisabled: {
+    backgroundColor: '#94A3B8',
+    elevation: 0,
   },
-  confirmText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
+  submitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
 });

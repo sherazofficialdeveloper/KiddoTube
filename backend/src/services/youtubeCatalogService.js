@@ -70,19 +70,45 @@ function formatDuration(duration = '') {
 }
 
 async function getVideoMetadata(videoIds) {
-  if (videoIds.length === 0) return [];
-  const data = await request('videos', {
-    part: 'snippet,contentDetails',
-    id: videoIds.slice(0, 50).join(',')
-  });
-  return data.items.map((item) => ({
-    youtubeId: item.id,
-    title: item.snippet.title,
-    channelTitle: item.snippet.channelTitle,
-    thumbnailUrl: thumbnailFrom(item.snippet.thumbnails),
-    durationText: formatDuration(item.contentDetails.duration),
-    description: item.snippet.description || ''
-  }));
+  if (!videoIds || videoIds.length === 0) return [];
+  const results = [];
+  const CHUNK_SIZE = 50;
+  const chunks = [];
+
+  for (let i = 0; i < videoIds.length; i += CHUNK_SIZE) {
+    chunks.push(videoIds.slice(i, i + CHUNK_SIZE));
+  }
+
+  // Fetch chunks in parallel batches of 4 requests
+  const BATCH_SIZE = 4;
+  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+    const currentBatch = chunks.slice(i, i + BATCH_SIZE);
+    const batchData = await Promise.all(
+      currentBatch.map((chunk) =>
+        request('videos', {
+          part: 'snippet,contentDetails',
+          id: chunk.join(',')
+        })
+      )
+    );
+
+    for (const data of batchData) {
+      if (data && data.items) {
+        for (const item of data.items) {
+          results.push({
+            youtubeId: item.id,
+            title: item.snippet?.title || 'YouTube Video',
+            channelTitle: item.snippet?.channelTitle || 'Approved Channel',
+            thumbnailUrl: thumbnailFrom(item.snippet?.thumbnails),
+            durationText: formatDuration(item.contentDetails?.duration),
+            description: item.snippet?.description || ''
+          });
+        }
+      }
+    }
+  }
+
+  return results;
 }
 
 async function getChannel(identifier) {
@@ -125,27 +151,44 @@ async function getPlaylist(playlistId) {
   return playlist;
 }
 
-async function getPlaylistVideoIds(playlistId) {
-  const data = await request('playlistItems', {
-    part: 'contentDetails',
-    playlistId,
-    maxResults: '50'
-  });
-  return data.items
-    .map((item) => item.contentDetails?.videoId)
-    .filter(Boolean);
+async function getPlaylistVideoIds(playlistId, maxVideos = 2500) {
+  if (!playlistId) return [];
+  const videoIds = [];
+  const seen = new Set();
+  let pageToken = undefined;
+  let pageCount = 0;
+  const maxPages = Math.ceil(maxVideos / 50) + 10;
+
+  do {
+    const params = {
+      part: 'contentDetails',
+      playlistId,
+      maxResults: '50'
+    };
+    if (pageToken) {
+      params.pageToken = pageToken;
+    }
+    const data = await request('playlistItems', params);
+    const items = data.items || [];
+    if (items.length === 0) break;
+
+    for (const item of items) {
+      const vid = item.contentDetails?.videoId;
+      if (vid && !seen.has(vid)) {
+        seen.add(vid);
+        videoIds.push(vid);
+      }
+    }
+    pageToken = data.nextPageToken;
+    pageCount++;
+  } while (pageToken && videoIds.length < maxVideos && pageCount < maxPages);
+
+  return videoIds;
 }
 
-async function getChannelVideos(uploadsPlaylistId) {
+async function getChannelVideos(uploadsPlaylistId, maxVideos = 2500) {
   if (!uploadsPlaylistId) return [];
-  const data = await request('playlistItems', {
-    part: 'contentDetails',
-    playlistId: uploadsPlaylistId,
-    maxResults: '50'
-  });
-  return data.items
-    .map((item) => item.contentDetails?.videoId)
-    .filter(Boolean);
+  return getPlaylistVideoIds(uploadsPlaylistId, maxVideos);
 }
 
 module.exports = {
